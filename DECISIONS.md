@@ -1,0 +1,124 @@
+# DECISIONS.md — Kayani Autos / Kiyan Traders Business Management System
+
+Log of individual decisions with rationale. `CLAUDE.md` holds the current-state
+summary; this file holds the history and the "why." Newest entries at the top.
+
+---
+
+## 2026-09-07 — Standard audit columns on every table
+
+**Decision:** Every table gets `created_at` / `updated_at` (timestamptz,
+default now()). Transactional/user-editable tables additionally get
+`created_by` / `updated_by` (nullable FK to `users.id`).
+
+**Rationale:** Cheap to add now; expensive to backfill once real data exists.
+Implemented uniformly (all tables get all four columns) rather than picking
+and choosing per table, to keep the schema predictable.
+
+**Source:** Confirmed with Mehmoon, 2026-09-07.
+
+---
+
+## 2026-09-07 — Currency stored as `numeric(14,2)`, not integer paisa
+
+**Decision:** Money amounts (once invoice/ledger/costing tables are built)
+will use Postgres `numeric(14,2)` in whole rupees, not `bigint` paisa.
+
+**Rationale:** Exact decimal arithmetic, standard for accounting, avoids a
+divide-by-100 step at every read/report layer. No money-bearing tables exist
+yet in this pass (chart of accounts stores no balances), so this hasn't been
+used in code yet — it's the standard to apply once invoices/ledger/inventory
+costing are built.
+
+**Source:** Confirmed with Mehmoon, 2026-09-07.
+
+---
+
+## 2026-09-07 — UUIDv7 primary keys; sequential document numbers kept separate
+
+**Decision:** Every table's primary key is a UUIDv7 (not v4, not
+serial/bigserial), generated in the application via the `uuidv7` npm package
+(`$defaultFn`), not a Postgres-side default — keeps it independent of the
+server's Postgres version. Human-facing invoice/receipt numbers are a
+separate sequential value per legal entity, generated independently of the
+UUID PK, and are the only identifier ever printed on documents or sent to
+FBR — UUIDs are never client-facing.
+
+**Rationale:** Multiple offline terminals will create rows before any sync
+happens. Client-generated UUIDs need no central authority to avoid
+collisions. v7 (vs v4) is time-ordered, which avoids the local Postgres
+write-path index fragmentation that random v4 UUIDs cause. Sequential
+integers as PKs were rejected because two offline terminals can independently
+create "row 1."
+
+**Open question this decision surfaced (not resolved):** the sequential
+document-number scheme (see `document_number_counters` in
+`src/db/schema/documents.ts`) assumes one active writer at a time per legal
+entity + document type. If two terminals can be offline simultaneously and
+both issue, say, Kiyan Traders sales invoices, they will independently
+increment their own local counter and collide once they sync. Needs a
+decision (pre-allocated number blocks per terminal, or restricting invoice
+creation for a given entity to one terminal at a time) before this is relied
+on for FBR submission.
+
+**Source:** Confirmed with Mehmoon, 2026-09-07.
+
+---
+
+## 2026-09-07 — Drizzle over Prisma
+
+**Decision:** Drizzle ORM, not Prisma.
+
+**Rationale:** No bundled binary query engine, so Electron packaging stays
+clean. Raw-SQL control needed for LIFO costing logic. Lighter runtime, better
+fit for the background sync worker.
+
+**Source:** Confirmed with Mehmoon prior to this session; logged here
+retroactively since this file didn't exist yet. See `CLAUDE.md` section 3.
+
+---
+
+## 2026-09-07 — Implementation details decided without a separate ask
+
+These are lower-stakes technical choices made while scaffolding the schema —
+logged here for visibility, not treated as architecture decisions requiring
+sign-off, since they're easily changed later without a data-shape impact.
+
+- **Postgres driver:** `postgres` (postgres.js) over `pg` (node-postgres).
+  Pure JS, no native bindings, lighter — consistent with the same rationale
+  already used to pick Drizzle over Prisma. Swappable later with no schema
+  impact.
+- **`account_category`** (the 5 chart-of-accounts headers) modeled as a
+  Postgres enum, not an admin-editable table like `roles`/`permissions`.
+  These are fixed accounting classifications (asset/liability/equity/income),
+  not business-configurable roles — unlike roles, they shouldn't need
+  runtime editing.
+- **`document_type`** on `document_number_counters` is free-text
+  (`varchar`), not an enum, because the full list of document types
+  (sales invoice, delivery challan, receipt/payment voucher, etc.) isn't
+  finalized yet. Enums require a migration to extend; free text doesn't.
+
+---
+
+## Open items carried from CLAUDE.md (tracked here so they don't get lost)
+
+Do not resolve these silently. See `CLAUDE.md` section 6 and inline
+`[unclear — confirm]` comments in the schema for full context.
+
+- Exact relationship between the Markers/Items form and the Control Part
+  form (`src/db/schema/inventory.ts`).
+- Whether "parent/child linking" in the inventory structure applies at the
+  Control Part level (as modeled), the Item level, or across all three.
+- Whether a user can hold more than one role at once (`user_roles` modeled
+  as many-to-many to avoid foreclosing either answer).
+- **Authority Levels module** — flagged in CLAUDE.md as needing its own
+  requirements conversation. The RBAC scaffold built in this pass
+  (`roles` / `permissions` / `role_permissions`) is being treated as a
+  *different* concept from Authority Levels (basic access control vs. what
+  we're assuming is approval/spending-limit tiers). Not confirmed — if
+  they turn out to be the same thing, this schema needs revisiting.
+- Chart of accounts numbering/coding scheme ("expansion-ready" per the
+  client, but no scheme was provided).
+- "Party Form" for report classification — no details exist yet; not built.
+- Document-number collision risk across simultaneously-offline terminals
+  (see UUIDv7 entry above).
