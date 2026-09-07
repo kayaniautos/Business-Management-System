@@ -5,6 +5,32 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-07 — Real brand assets and business contact info received
+
+**What happened:** Client provided the two real logos (`Kiyan Traders Logo.png`,
+`Kiyani Auto Logo.png` — Kiyani Autos trades as "Kiyani Auto Toyota") and the
+business's address/phone/email for use on the app and printed
+invoices/documents. See CLAUDE.md section 1 for the actual values.
+
+**Action taken:** Swapped the placeholder wordmark/icon in the UI concept
+(login screen, POS counter top bar) for the real logos - downsampled from
+~500KB to ~34KB each via .NET `System.Drawing` (no ImageMagick/Pillow/sharp
+available on this machine) since the design canvas keeps images under
+~70KB. Added the address/phone/email as a footer line on the login screen
+(the only screen so far resembling a "cover page" for the business; no
+invoice/receipt document template exists yet to put it on properly).
+Deliberately did NOT put a single entity's logo on the Inventory screen's
+top bar - inventory is the shared pool across both entities, so branding it
+to one company would misrepresent that.
+
+**Not resolved:** whether printed documents show this contact info once
+per entity or shared once for both (client gave one set covering both) -
+tracked in CLAUDE.md open questions.
+
+**Source:** Provided by Mehmoon, 2026-09-07.
+
+---
+
 ## 2026-09-07 — UI/UX: exploratory concept pass, not lock-in; accessibility floors set
 
 **Decision:** Before starting any UI/UX work, confirmed two things with

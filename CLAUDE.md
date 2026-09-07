@@ -11,9 +11,18 @@ We are building a custom offline-first ERP system covering POS, inventory manage
 The business operates as **two separate legal entities sharing one roof and one physical inventory pool**:
 
 - **Kiyan Traders** — GST-registered, FBR POS integrated
-- **Kiyani Autos** — retail
+- **Kiyani Autos** — retail, trades as **"Kiyani Auto Toyota"** on its logo/signage (confirmed via logo file, 2026-09-07 — not previously captured; not necessarily a formal Toyota dealership affiliation, just the trading name in use)
 
 Each entity requires **separate books** despite sharing inventory. This is one of the central design challenges of the system.
+
+**Brand assets (confirmed 2026-09-07):** both entities have real logos, provided by the client — `Kiyan Traders Logo.png` and `Kiyani Auto Logo.png` in the `Kayani Autos` folder alongside this repo (not committed to the repo itself; source files, not app assets yet). Both are a black/red gear mark with a bold KT / KA monogram. Use these on every document and screen that shows a company identity — do not invent a placeholder wordmark/icon going forward (the first UI concept pass did, before these existed; already corrected there).
+
+**Business contact info for invoices/documents (confirmed 2026-09-07):**
+- Address: Kiyani Auto Market, Gawalmandi Road, Rawalpindi
+- Phone: 051-5552489 / 5530887, 0339-4007532
+- Email: kiyantraderstoyotta@gmail.com (the business's own public contact address — distinct from the neutral `dev.kayaniautos@gmail.com` handover account used for infra in section 3)
+
+This needs to appear on printed invoices/receipts/documents once those screens exist (they don't yet). Whether it's per-entity (each entity's own line) or shared (one set of contact info for both) is `[unclear — confirm]` — client gave one address/phone/email, not two.
 
 **Primary client contact:** Ghaus Kayani
 
@@ -166,6 +175,7 @@ Do not resolve these silently in code. Flag with `[unclear — confirm]` and rai
 - Employee code linking for reports
 - Exact business definitions of RPP and SAP
 - Whether the client's Reports list is final (client notes end with "Details to be continued")
+- Whether printed invoices/documents show one shared address/phone/email for both entities, or the same contact info repeated per entity (client provided one set, covering both)
 
 ---
 
