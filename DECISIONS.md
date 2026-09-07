@@ -5,6 +5,52 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-07 — UI/UX: exploratory concept pass, not lock-in; accessibility floors set
+
+**Decision:** Before starting any UI/UX work, confirmed two things with
+Mehmoon: (1) the AnyDesk review of the client's current system — previously
+a hard blocker per this file and CLAUDE.md section 5 — is done, so UI work
+is unblocked; (2) this first pass is an **exploratory style-direction**
+concept (visual language + 3 sample screens: staff PIN login, POS counter,
+inventory), not full lock-in across every workflow. Delivered as a design
+canvas artifact: https://claude.ai/code/artifact/ba934bdb-69f8-4233-a70a-c6c26412aeaf
+
+Visual direction: glassmorphism-influenced (frosted-glass panels for
+structural chrome only — top bars, containers), but every actual
+interactive control (buttons, inputs) is solid and high-contrast, never
+glass, because the audience is blue-collar counter/inventory staff, not a
+consumer app audience. Sora (headings) + Manrope (body) from Google Fonts;
+amber/orange accent (`#c2410c`).
+
+**Two usability floors adopted for this build and going forward:**
+- Interactive touch targets: **44px minimum** height/width (not the 24-32px
+  common in dense desktop UI). A background review of the first draft found
+  several controls (cart quantity steppers, delete/edit icon buttons) built
+  at 26-32px; all were corrected to 44px before this was shown.
+- Text-on-color contrast: **WCAG AA** (4.5:1 for normal/small text, 3:1 for
+  large bold text). The first draft's default accent (`#e8823a`) only hit
+  ~2.9:1 against white button text and was replaced with `#c2410c` (~5.2:1)
+  before this was shown. The color options offered alongside it
+  (`#2563eb`, `#047857`, `#7c3aed`) were each checked against the same
+  4.5:1 floor.
+
+**Rationale:** Client feedback loop is still open (client has looked at the
+concept and asked whether things are "missing" — expected, since only 3 of
+many needed screens exist and nothing is wired up yet). Documenting the
+scope decision and the two accessibility floors here so they don't get
+re-litigated per-screen as more screens are built, and so the planning
+account stays in sync on why this isn't a finished UI.
+
+**Not yet resolved:** no interactivity (static mockups only), no
+accounting/ledger/reports/settings/permissions-admin screens, no
+mobile/tablet layouts, no error/empty/loading states. These are open scope,
+not oversights - to be picked up once the client has reacted to the
+direction shown so far.
+
+**Source:** Confirmed with Mehmoon, 2026-09-07.
+
+---
+
 ## 2026-09-07 — Standard audit columns on every table
 
 **Decision:** Every table gets `created_at` / `updated_at` (timestamptz,
