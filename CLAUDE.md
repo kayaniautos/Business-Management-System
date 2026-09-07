@@ -146,6 +146,13 @@ Full structure as provided by client:
 - Chart of accounts coding should be expansion-ready.
 - Report classification should be based on a Party Form.
 
+### 4.5 Invoice / Sale Requirements (gathered ahead of schema build)
+
+No invoice/sale/ledger schema exists yet (see section 5, remaining Phase 1 work / "what's next" candidate #3). These are confirmed requirements to design that schema around, gathered from client feedback on the UI concept (2026-09-07), so they aren't lost before that work starts:
+
+- **Per-line discounts, itemized:** a sale can carry one or two named discount lines (e.g. "Special discount"), each a **flat Rupee amount** (not a percentage). Ties to the existing "Discount Expense Net" chart-of-accounts line above. `[unclear — confirm]` whether this is Kiyani Autos-only or available on both entities.
+- **Per-invoice item name override:** staff can change how an item's name prints on one invoice, without altering the item's actual catalog name (`items`/`control_parts`). This is a property of the future invoice line-item record, not the catalog record — a nullable display-name override per line, resolved at print/display time only.
+
 ---
 
 ## 5. Build Phases & Payment

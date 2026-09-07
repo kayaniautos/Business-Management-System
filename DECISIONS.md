@@ -5,6 +5,30 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-07 — Client feedback: per-invoice item name override
+
+**What happened:** Ghaus Kayani wants to change an item's displayed name
+while making an invoice, without changing the item's actual catalog name —
+the changed name shows only on that printed invoice.
+
+**How this will be handled:** this is a property of an invoice **line
+item**, not of the catalog item itself. It belongs in the invoice/sale
+schema (not built yet - see "what's next" candidate #3, invoices/ledger/
+LIFO engine). When that schema is built, each invoice line item gets its
+own nullable display-name field that overrides the catalog `control_parts`
+/ `items` name for print/display purposes only; the catalog record is
+never touched. No schema exists to add this to yet, so nothing was changed
+in `src/db/schema/`.
+
+**Action taken now:** added the UI affordance to the POS counter mockup so
+the concept is visible before that schema work starts — one cart line
+shows a shortened name ("Oil Filter" instead of "Oil Filter - Standard")
+with an edit icon and a caption stating the catalog name is unchanged.
+
+**Source:** Client (Ghaus Kayani) via Mehmoon, 2026-09-07.
+
+---
+
 ## 2026-09-07 — Client feedback: itemized flat-amount discounts on a sale
 
 **What happened:** Ghaus Kayani reviewed the UI concept (relayed by
