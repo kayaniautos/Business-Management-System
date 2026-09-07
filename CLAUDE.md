@@ -193,6 +193,7 @@ Do not resolve these silently in code. Flag with `[unclear — confirm]` and rai
 
 - Free-tier Vercel and Supabase are **unsuitable** for this project: Vercel Hobby prohibits commercial use; Supabase free tier auto-pauses after 7 days and has insufficient storage. Provision paid tiers.
 - Hugging Face model downloads are blocked in sandboxed dev environments used for planning (network allowlist doesn't cover huggingface.co) — not relevant to production but worth knowing if transcription/ML tooling comes up during planning sessions.
+- **Local dev PostgreSQL (2026-09-07):** PostgreSQL 17 is installed on Mehmoon's dev machine (Windows service `postgresql-x64-17`, port 5432, superuser `postgres`/`postgres` — matches `.env.example`, dev-only). Database `kayani_autos` exists. The schema in `src/db/schema/` has been applied for real (`npm run db:migrate`) and seeded (`npm run db:seed`, confirmed idempotent on re-run) — not just generated as SQL. Spot-checked: chart-of-accounts entity tagging is null everywhere except the 5 bank rows (confirms the section 3.1/4.4 design actually holds in data, not just intent); markers→items→control_parts inserts, the parent/child self-reference, the parts↔car-models join, and FK rejection of bad references all verified working end to end.
 
 ---
 
