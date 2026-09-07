@@ -176,6 +176,7 @@ Do not resolve these silently in code. Flag with `[unclear — confirm]` and rai
 - Exact business definitions of RPP and SAP
 - Whether the client's Reports list is final (client notes end with "Details to be continued")
 - Whether printed invoices/documents show one shared address/phone/email for both entities, or the same contact info repeated per entity (client provided one set, covering both)
+- Whether sale discounts (flat Rupee amount, itemized, up to 2 lines per sale — confirmed 2026-09-07) are a Kiyani Autos-only behavior or available on both entities
 
 ---
 

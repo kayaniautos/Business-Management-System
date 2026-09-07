@@ -5,6 +5,35 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-07 — Client feedback: itemized flat-amount discounts on a sale
+
+**What happened:** Ghaus Kayani reviewed the UI concept (relayed by
+Mehmoon). Feedback: general direction is fine on the face of it but final
+judgment needs an in-person walkthrough. One concrete gap: no way to apply
+a discount, which "sometimes happens" at Kiyani Auto. He wants it
+**itemized** (one or two separate named discount lines on a sale, not a
+single lump-sum field) and entered as a **flat Rupee amount, not a
+percentage**.
+
+**Action taken:** Added an itemized discount line ("Special discount -
+Rs 200") to the POS counter cart mockup, with a remove control and an
+"Add another discount (max 2)" affordance, flowing into the total. This
+lines up with the existing "Discount Expense Net" line already in the
+confirmed chart of accounts (CLAUDE.md 4.4) - the ledger side was already
+anticipated, just not the POS-side entry point until now.
+
+**Not resolved - needs Mehmoon/client to clarify:** whether discounting is
+a Kiyani Autos-only behavior (never applied on Kiyan Traders/GST-registered
+sales) or available on both entities and it just happens to come up at
+Kiyani Autos in practice. This matters for whether discount logic is
+entity-conditional or universal once the real invoice/sale schema is
+built (which doesn't exist yet - this is still mockup-only, no schema
+change made). Tracked in CLAUDE.md open questions.
+
+**Source:** Client (Ghaus Kayani) via Mehmoon, 2026-09-07.
+
+---
+
 ## 2026-09-07 — Real brand assets and business contact info received
 
 **What happened:** Client provided the two real logos (`Kiyan Traders Logo.png`,
