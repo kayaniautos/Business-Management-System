@@ -1,0 +1,32 @@
+{
+  "name": "business-management-system",
+  "version": "0.1.0",
+  "description": "Kayani Autos / Kiyan Traders offline-first ERP/POS system",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx src/db/seed.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.6",
+    "postgres": "^3.4.7",
+    "uuidv7": "^1.0.2",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.5",
+    "typescript": "^5.9.3",
+    "tsx": "^4.20.6",
+    "@types/node": "^24.9.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kayaniautos/Business-Management-System.git"
+  }
+}
