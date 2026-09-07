@@ -147,7 +147,7 @@ Eight build phases total, four payment milestones tied to phases. Payment/negoti
 
 Phase 1 discovery blockers have been cleared with the client. Remaining Phase 1 work:
 - Schema/scaffolding for confirmed structures — **first pass done** (`src/db/schema/`): users/roles/permissions (RBAC only, not Authority Levels — see open questions), three-step inventory structure, parts↔car-models many-to-many, flat chart of accounts (seeded), first-pass `fbr_queue`. No invoices, ledger, or LIFO cost-layer tables yet — out of scope for this pass.
-- UI screen lock-in — **blocked on AnyDesk review of the client's current system**, not yet completed
+- UI screen lock-in — **AnyDesk review of the client's current system is done, blocker cleared (2026-09-07).** An exploratory style-direction pass (glassmorphism-influenced, high-contrast/large-touch-target for blue-collar staff) with 3 key screens (staff PIN login, POS counter, inventory) has been drafted for reaction: https://claude.ai/code/artifact/ba934bdb-69f8-4233-a70a-c6c26412aeaf — not yet locked in as final, no client feedback incorporated yet, not committed to this repo (mockup only, not app code).
 - Remaining open questions are deferred to the phase that needs them, not resolved early
 
 ---
