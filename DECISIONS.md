@@ -5,6 +5,92 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-08 — Imported full planning-account context; found and flagged real gaps
+
+**What happened:** Mehmoon had a separate Claude.ai Project (the "planning
+account" referenced throughout this file and CLAUDE.md) holding substantially
+more project context than had made it into this repo. Since Claude Code has
+no access to another Claude Project, he ran an export prompt in that Project
+and pasted the output here as two files: `kayani-erp-full-export.md` and
+`kayani-erp-project-handover.md`. Both are now preserved verbatim in
+`docs/planning/` so future sessions can go back to source material rather
+than a summary of a summary (the planning doc's own stated lesson from an
+earlier mistake - see CLAUDE.md section 12).
+
+**What this surfaced, in order of how much it matters:**
+
+1. **The discount open question is resolved.** The handover doc (section
+   6.1) states discounts are itemized for Kiyani Autos only; Kiyan Traders
+   uses net-of-discount pricing with no separate line. This independently
+   corroborates what Ghaus told Mehmoon live the same day ("which sometimes
+   happens just at Kiyani Auto" - see the 2026-09-07 discount entry below).
+   Two independent sources agreeing is about as confirmed as this gets
+   without the client explicitly signing off in writing. Logged in
+   CLAUDE.md section 5.10. **Follow-up not yet done:** the POS mockup
+   currently shows the itemized discount UI unconditionally - it should be
+   gated to the Kiyani Autos entity view once the mockup is touched again.
+
+2. **This repo overstated the roles/Authority-Levels confirmation status.**
+   CLAUDE.md previously said "five roles confirmed." Per the actual planning
+   history, that five-role list (Counter Control / Corporate Control /
+   Receipts-Payments Control / Inventory Control / Management Control) was
+   one of *two* candidates discussed with the client - the other being a
+   three-tier Owner/Manager/Cashier model - and *neither* was actually
+   confirmed. This repo's RBAC schema and seed data
+   (`src/db/schema/users.ts`, `src/db/seed.ts`) already seeded the five-role
+   list as `is_system: true`, as if it were settled. Not unwinding the seed
+   data now (it's inert placeholder data, nothing depends on it yet), but
+   flagging clearly - see CLAUDE.md section 6 - so nothing further gets
+   built on that assumption before the client actually confirms one
+   structure.
+
+3. **Chart of accounts is now a three-way conflict, not the single
+   confirmed list this repo previously treated it as.** The planning
+   export already flagged two non-matching versions across earlier
+   sources; reconciling against what's actually seeded in this repo
+   (`src/db/schema/accounts.ts`) reveals it matches neither exactly - a
+   third version. The *structural* design (flat COA, entity tag only at
+   the bank-account level) is unaffected and still correct regardless of
+   which content-version wins, and stays validated against a real local
+   Postgres. But the actual line items need the client to pick one version
+   before anything downstream (reports, ledger posting rules) gets built
+   against them. Full diff in CLAUDE.md section 4 and
+   `docs/planning/kayani-erp-full-export.md` section 4.1.
+
+4. **Reports/Vouchers is a three-way conflict too**, not previously
+   flagged in this repo at all since no reports work had started. See
+   CLAUDE.md section 8.
+
+5. **Whole modules exist in the client's actual notes that this repo's
+   schema has no representation of yet**: Party Form (customers/vendors,
+   with independent Status C1/C2/C3 and Nature S1/S2/S3 classification),
+   Deal Part (sales-time bundling), Stock Ordering, Stock Adjustment, and
+   the full Quotation -> Delivery Note -> Invoice document chain with its
+   post/unpost pattern. None of this was scoped for the current schema
+   pass regardless, but it's now documented in CLAUDE.md section 5 with
+   pointers to the full field-level spec, so it doesn't get missed when
+   that work starts.
+
+**Also recovered:** the client's actual field-level Item Form spec (lettered
+fields a-i, Form A), which is meaningfully richer than the simplified
+three-step `markers -> items -> control_parts` schema already built - e.g.
+Item Code is meant to double as a future barcode, and the `car_models`
+table is missing several fitment fields (frame/engine name, CC,
+transmission, fuel) that the client's actual Control Part Form (Form B)
+specifies. Flagged in CLAUDE.md sections 5.2-5.3 rather than reworked
+immediately, since reworking already-built and seeded schema is itself a
+decision to confirm, not something to do silently mid-import.
+
+**Not done:** no schema changes were made as part of this import - only
+documentation (CLAUDE.md rewrite, this entry, `docs/planning/` added).
+Whether/how to reconcile the already-built schema against the richer spec
+is a separate decision for Mehmoon to make, not assumed here.
+
+**Source:** Planning-account Claude Project export, relayed by Mehmoon,
+2026-09-08.
+
+---
+
 ## 2026-09-07 — Client feedback: per-invoice item name override
 
 **What happened:** Ghaus Kayani wants to change an item's displayed name
