@@ -5,6 +5,67 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-09 — Built first-pass Sales document chain (Quotation/DN/Invoice)
+
+**Decision:** Built `sales_documents`, `sales_document_lines`,
+`sales_document_links`, and `sales_document_discounts`
+(`src/db/schema/sales-documents.ts`) per CLAUDE.md 5.9/5.10 — the actual
+Phase 2 deliverable now that Party exists to support it.
+
+**Key design choices:**
+- **One shared header table with a `documentType` discriminator**
+  (quotation/delivery_note/invoice), not three separate tables. The three
+  document types share almost every field, and the client's own notes
+  explicitly ask for identical line-sequencing and Print Name behavior
+  across all three - matching that in three parallel tables would mean
+  tripling the same logic. The tradeoff: Quotation's "never actually
+  posted" rule (CLAUDE.md 5.9) is enforced in application logic, not the
+  schema, since it shares `salesDocumentStatusEnum` with DN/Invoice rather
+  than getting its own more restrictive status type.
+- **`sales_document_links` is many-to-many, not a single
+  `previous_document_id` column** - the client's notes are explicit that
+  one Invoice can merge lines from several DNs combined, and (by the same
+  reasoning) more than one DN could plausibly be raised from one
+  Quotation by picking different items each time.
+- **Discount lines are their own table**, not a discriminated line-item
+  type, because they don't share fields well with a real product line (no
+  control part, no quantity, no tax breakdown) - just a label and a flat
+  amount. The "Kiyani Autos only, max 2" rules live in the application,
+  not a DB constraint (a CHECK can't reach the parent row's entity without
+  a trigger) - same pattern already used for `party_phone_numbers`.
+- **`controlPartId` is required (not nullable) on line items for now**,
+  because Deal Part (bundling) and the "generic catch-all item" for
+  uncatalogued parts both need their own reference and neither is built
+  yet. Flagged as an extension point rather than guessing at their shape.
+
+**Deliberately scoped out, not oversights:**
+- **Settlement channels / payments.** CLAUDE.md's own build-phase table
+  puts "settlement channels" under Phase 4 (Accounting), not Phase 2
+  (Sales) - building a payments table now, before the Vouchers module
+  (CLAUDE.md section 8) is designed, risks two competing mechanisms for
+  the same concept later. This also sidesteps the open question of
+  whether a sale can split across multiple channels - no schema commitment
+  either way yet.
+- **Margin alerts / override logging** (CLAUDE.md 5.10) - needs a real
+  cost figure from the LIFO cost-layer engine, which doesn't exist. An
+  inert "margin override" column with nothing to compute against would be
+  a half-finished feature.
+- **Actual tax computation.** `lineTaxAmount` and `taxTotal` columns exist
+  to hold a result, but no tax-rule engine was built - the "gross price
+  in, system computes the breakdown" pattern is a future application-layer
+  concern, not a schema one.
+
+**Verified end to end against the live local database** (inside a rolled-
+back transaction): a full Quotation -> DN -> Invoice chain via
+`sales_document_links`; a per-invoice renamed line ("Oil Filter") resolving
+correctly alongside its unchanged catalog name ("Oil Filter - Standard");
+a discount line correctly dropping an invoice's total from Rs 900 to
+Rs 700; and FK rejection of a bad `control_part_id`. No data left behind.
+
+**Source:** Mehmoon, 2026-09-09.
+
+---
+
 ## 2026-09-08 — Built first-pass Party Form schema
 
 **Decision:** Built `parties` and `party_phone_numbers`
