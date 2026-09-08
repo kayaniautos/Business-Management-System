@@ -5,6 +5,53 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-08 — Verified the actual chart-of-accounts spreadsheet against the transcription
+
+**What happened:** Mehmoon attached the client's actual `chart of
+accounts.xlsx`. Opened it directly (Node + SheetJS, since this machine has
+no real Python install - only the Windows Store stub alias; noted as an
+environment gotcha below) and compared cell-by-cell against the
+transcription already in `docs/planning/kayani-erp-full-export.md` section
+2.
+
+**Result: exact match.** Every chart-of-accounts line (all 5 sections),
+all 19 numbered reports, and all 9 vouchers are identical to the
+transcription, including which specific accounts carry the "status of
+party-wise" / "on the basis of LIFO" annotations. This was not a
+summary-of-a-summary error - the transcription is accurate to the source.
+
+**Consequence for the three-way COA conflict logged in the previous
+entry:** this doesn't resolve which conceptual version the client wants
+going forward, but it does confirm "version 2" (the 2026-09-07 spreadsheet)
+is a faithful, directly-verified primary source - the strongest-provenance
+of the three versions, since it's an actual file from the client rather
+than a chat summary or memory. Recommend treating it as the working
+default once the client confirms, rather than the memory-held earlier
+version.
+
+**Also confirmed, not a transcription artifact:** the apparent duplication
+flagged in the previous entry - "Income Tax Payable Account" / "GST
+Payable Account" under Equity & Reserves, alongside "Income Tax
+Withheld/Payable Account" / "GST Withheld/Payable Account" (status-of-
+party-wise) under Income/(Loss) - is genuinely in the client's own file.
+Still worth confirming with Ghaus rather than assuming either is a mistake.
+
+**Not done:** no schema or seed data changes. `src/db/schema/accounts.ts`
+and `src/db/seed.ts` still reflect the shorter, earlier "version 3" and
+have not been updated to match this verified spreadsheet - that's a
+seed-data change worth confirming before making, not assumed here.
+
+**Environment note:** this machine has no real Python (`python`/`python3`
+resolve to the Windows Store install-stub, `py` launcher isn't present).
+The xlsx skill assumes a preconfigured Python + openpyxl/pandas/markitdown
+environment that doesn't exist here - worked around this once with a
+throwaway Node + SheetJS script instead. Worth installing real Python if
+spreadsheet work becomes routine.
+
+**Source:** `chart of accounts.xlsx`, attached by Mehmoon, 2026-09-08.
+
+---
+
 ## 2026-09-08 — Imported full planning-account context; found and flagged real gaps
 
 **What happened:** Mehmoon had a separate Claude.ai Project (the "planning
