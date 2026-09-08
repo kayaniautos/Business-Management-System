@@ -2,6 +2,7 @@ import {
   boolean,
   pgEnum,
   pgTable,
+  text,
   uuid,
   varchar,
   type AnyPgColumn,
@@ -49,10 +50,15 @@ export const chartOfAccounts = pgTable("chart_of_accounts", {
   category: accountCategoryEnum("category").notNull(),
   name: varchar("name", { length: 200 }).notNull().unique(),
   code: varchar("code", { length: 50 }),
+  // Verbatim annotations from the client's own spreadsheet on specific
+  // accounts, e.g. "status of party-wise" or "status of party-wise on the
+  // basis of LIFO" (CLAUDE.md section 4). Free text, not structured,
+  // because the Party Form (CLAUDE.md 5.5) this ties to doesn't exist yet.
+  note: text("note"),
   parentAccountId: uuid("parent_account_id").references(
     (): AnyPgColumn => chartOfAccounts.id,
   ),
-  // Populated only for the 5 bank accounts. Null everywhere else.
+  // Populated only for the 6 bank accounts. Null everywhere else.
   legalEntityId: uuid("legal_entity_id").references(() => legalEntities.id),
   isActive: boolean("is_active").notNull().default(true),
   ...timestampColumns,

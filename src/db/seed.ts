@@ -9,6 +9,14 @@ import { roles } from "./schema/users.js";
  * seed permissions or role_permissions grants — those keys aren't defined
  * yet and shouldn't be invented here.
  *
+ * The chart of accounts below matches `chart of accounts.xlsx`
+ * (client-provided 2026-09-07) verbatim, verified cell-by-cell against the
+ * actual file on 2026-09-08 (see DECISIONS.md) — including its exact
+ * wording (e.g. "Cost of Good Sold", singular, as the client's own file
+ * has it) and the two accounts moved from Current Assets to Income/(Loss)
+ * per that file. Do not "fix" wording to look more correct without
+ * checking the source file again first.
+ *
  * Safe to re-run: every insert is onConflictDoNothing keyed on the same
  * unique constraint the schema defines.
  */
@@ -26,36 +34,69 @@ async function main() {
     // Non-Current Assets
     { category: "non_current_asset", name: "Shop at Cost" },
     { category: "non_current_asset", name: "Vehicles at Cost" },
-    { category: "non_current_asset", name: "Software/Computer/Hardware" },
+    { category: "non_current_asset", name: "ERP, Computer & Hardware" },
     // Current Assets
     { category: "current_asset", name: "Parts Inventory Stock" },
-    { category: "current_asset", name: "Parts Sold but not Invoiced Yet" },
-    { category: "current_asset", name: "Security Deposits" },
-    { category: "current_asset", name: "Income Tax Withheld" },
-    { category: "current_asset", name: "GST Withheld" },
-    { category: "current_asset", name: "Customer Receivable" },
+    {
+      category: "current_asset",
+      name: "Parts Sold but not Invoiced Yet (Un-invoiced delivery challans)",
+    },
+    { category: "current_asset", name: "Security Deposits Account" },
+    { category: "current_asset", name: "Customer Receivable Account" },
     { category: "current_asset", name: "Cash in Hand" },
-    { category: "current_asset", name: "Easypaisa" },
-    { category: "current_asset", name: "Jazz Cash" },
+    { category: "current_asset", name: "Easypaisa Account" },
+    { category: "current_asset", name: "Jazz Cash Account" },
     // Equity & Reserves
-    { category: "equity_reserve", name: "Acquisition Cost" },
-    { category: "equity_reserve", name: "Retained Earnings" },
-    { category: "equity_reserve", name: "Drawings" },
+    { category: "equity_reserve", name: "Acquisition Cost Account" },
+    { category: "equity_reserve", name: "Retained Earnings Account" },
+    {
+      category: "equity_reserve",
+      name: "Provision for Parts inventory stock at LPP",
+    },
+    { category: "equity_reserve", name: "Income Tax Payable Account" },
+    { category: "equity_reserve", name: "GST Payable Account" },
+    { category: "equity_reserve", name: "Drawings Account" },
     // Current Liabilities
-    { category: "current_liability", name: "Supplier Payable" },
+    { category: "current_liability", name: "Supplier Payable Account" },
     { category: "current_liability", name: "AFL Short Term Loan" },
-    // Income/(Loss)
-    { category: "income_loss", name: "Sale Income net of returns" },
-    { category: "income_loss", name: "Other Income" },
-    { category: "income_loss", name: "Cost of Goods Sold net of returns" },
-    { category: "income_loss", name: "Freight & Transportation Cost" },
-    { category: "income_loss", name: "Discount Expense Net" },
-    { category: "income_loss", name: "Business Expense" },
-    { category: "income_loss", name: "Stock Adjustment Net" },
-    { category: "income_loss", name: "Salaries & Wages" },
-    { category: "income_loss", name: "Telephone/Electricity/Water Expense" },
-    { category: "income_loss", name: "Kitchen Expense" },
-    { category: "income_loss", name: "Miscellaneous Expense" },
+    // Income/(Loss) Account
+    {
+      category: "income_loss",
+      name: "Sale Income Account (net of sale returns)",
+      note: "status of party-wise",
+    },
+    {
+      category: "income_loss",
+      name: "GST Withheld/Payable Account",
+      note: "status of party-wise",
+    },
+    {
+      category: "income_loss",
+      name: "Income Tax Withheld/Payable Account",
+      note: "status of party-wise",
+    },
+    { category: "income_loss", name: "Other Income Account" },
+    {
+      category: "income_loss",
+      name: "Cost of Good Sold (net of returns)",
+      note: "status of party-wise on the basis of LIFO",
+    },
+    {
+      category: "income_loss",
+      name: "Current provision for Parts inventory stock at LPP",
+    },
+    { category: "income_loss", name: "Freight & Transportation Cost Account" },
+    { category: "income_loss", name: "Discount Expense Account (Net)" },
+    { category: "income_loss", name: "Business Expense Account" },
+    { category: "income_loss", name: "Stock Adjustment Account (Net)" },
+    { category: "income_loss", name: "Salaries & Wages Expense Account" },
+    { category: "income_loss", name: "Travelling Expense Account" },
+    {
+      category: "income_loss",
+      name: "Telephone, Electricity & Water Expense Account",
+    },
+    { category: "income_loss", name: "Kitchen Expense Account" },
+    { category: "income_loss", name: "Miscellaneous Expense Account" },
   ] satisfies (typeof chartOfAccounts.$inferInsert)[];
 
   await db
@@ -125,6 +166,12 @@ async function main() {
         name: "FBL Kiyani Autos 5050",
         parentAccountId: bankGroupId,
         legalEntityId: kiyaniAutosId,
+      },
+      {
+        category: "current_asset",
+        name: "JS Kiyan Traders",
+        parentAccountId: bankGroupId,
+        legalEntityId: kiyanTradersId,
       },
     ])
     .onConflictDoNothing({ target: chartOfAccounts.name });
