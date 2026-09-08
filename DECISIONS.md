@@ -5,6 +5,55 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-08 — Built first-pass Party Form schema
+
+**Decision:** Built `parties` and `party_phone_numbers`
+(`src/db/schema/parties.ts`) per CLAUDE.md section 5.5 (Form "D").
+
+**Why this one next:** it's small, fully specified (only one minor
+transcription question - "O2" vs "C2"), and it was already a dependency
+of work sitting unbuilt in the schema - four chart-of-accounts rows say
+"status of party-wise" with nothing to classify against. It also unblocks
+the Sales document chain and Reports module, both of which reference
+Party throughout. The alternative candidate (reworking Inventory to match
+the real Item Form/Control Part Form spec) was passed over for now
+because it still has an unresolved client-dependent ambiguity (the
+1A-vs-Control-Part-Form relationship, CLAUDE.md 5.2) and would mean
+reworking already-seeded tables - lower risk to do Party first.
+
+**Design choices:**
+- Status (`C1`/`C2`/`C3`) and Nature (`S1`/`S2`/`S3`) modeled as enums,
+  not admin-editable tables - same reasoning as `account_category`: fixed
+  business classifications tied to pricing/ledger logic, not something
+  staff invent new values for at runtime.
+- Phone numbers as a child table (`party_phone_numbers`), not an array
+  column, so each number can carry its own audit columns consistently
+  with the rest of the schema. The "1 to 5 phones" cap is an
+  application-layer rule, not a DB constraint - a count check would need
+  a trigger, overkill for a UI-level limit.
+- `printName` nullable, falls back to `name` at display time - the
+  simplest of the three Print Name patterns already documented
+  (CLAUDE.md 5.9), so no special-casing needed here.
+- No `legal_entity_id` on `parties` - nothing in the confirmed spec ties
+  a party to one entity, and adding one without confirmation would
+  contradict the existing "entity separation lives at the application
+  layer, don't invent structural entity tags" principle.
+
+**Verified against the live local database:** applied the migration,
+inserted a corporate party with two phone numbers and a wholesale party
+with a custom print name inside a transaction, confirmed both resolve
+correctly in a join query, confirmed the `party_status` enum rejects an
+invalid "O2" value, then rolled back (no data left behind - this repo's
+established validation pattern).
+
+**Not done:** nothing links to `parties` yet - chart-of-accounts
+party-wise reporting, Sales documents, and Customer/Supplier ledgers
+still need to reference it once built.
+
+**Source:** Mehmoon, 2026-09-08.
+
+---
+
 ## 2026-09-08 — Updated chart-of-accounts schema/seed to match the verified spreadsheet exactly
 
 **Decision:** After directly verifying `chart of accounts.xlsx` cell-by-cell
