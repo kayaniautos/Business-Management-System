@@ -5,6 +5,50 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-08 — Updated chart-of-accounts schema/seed to match the verified spreadsheet exactly
+
+**Decision:** After directly verifying `chart of accounts.xlsx` cell-by-cell
+(previous entry), Mehmoon asked to update the built schema to match it.
+Done.
+
+**Changes:**
+- Added a nullable `note` text column to `chart_of_accounts`
+  (`src/db/schema/accounts.ts`) to carry the client's own "status of
+  party-wise" / "status of party-wise on the basis of LIFO" annotations
+  verbatim - these previously had no home in the schema at all. New
+  migration `drizzle/0001_black_la_nuit.sql`, purely additive.
+- Rewrote every account name in `src/db/seed.ts` to the spreadsheet's
+  exact wording, including preserving "Cost of Good Sold" (singular,
+  presumably a typo in the client's own file) rather than silently
+  "fixing" it - the point was to match the source, not to improve on it.
+- Moved "GST Withheld" and "Income Tax Withheld" from Current Assets to
+  Income/(Loss) (renamed to ".../Payable Account", both status-of-party-wise)
+  to match the spreadsheet - this is a category change, not just a rename.
+- Added the accounts that were simply missing before: "JS Kiyan Traders"
+  (6th bank account, entity-tagged to Kiyan Traders), "Provision for Parts
+  inventory stock at LPP" (Equity & Reserves), "Current provision for
+  Parts inventory stock at LPP" (Income/(Loss), a distinct line from the
+  Equity one), "Income Tax Payable Account", "GST Payable Account"
+  (Equity & Reserves), "Travelling Expense Account".
+- Truncated the local dev database's `chart_of_accounts` table (disposable
+  test data, nothing else references it) and re-ran migrate + seed fresh,
+  rather than trying to rename rows in place.
+
+**Verified after reseeding:** 40 rows total, category counts match the
+spreadsheet exactly (3/14/6/2/15), the 4 notes attached to exactly the
+4 accounts the spreadsheet marks, 6 bank accounts entity-tagged, every
+other row's `legal_entity_id` still null, no stale old-wording rows left
+behind, seed still idempotent on a second run.
+
+**Not resolved:** this makes the repo's schema match the *spreadsheet*,
+not necessarily what the client ultimately wants - see the "what remains
+open" note in CLAUDE.md section 4 (the possible duplicate tax-payable
+accounts, and whether version 2 itself needs correcting).
+
+**Source:** Mehmoon, 2026-09-08.
+
+---
+
 ## 2026-09-08 — Verified the actual chart-of-accounts spreadsheet against the transcription
 
 **What happened:** Mehmoon attached the client's actual `chart of
