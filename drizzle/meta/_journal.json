@@ -15,6 +15,13 @@
       "when": 1788879307369,
       "tag": "0001_black_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788888084422,
+      "tag": "0002_useful_arachne",
+      "breakpoints": true
     }
   ]
 }
