@@ -14,6 +14,19 @@ export interface PartSearchResult {
   fitment: { make: string; model: string }[];
 }
 
+export interface StaffMember {
+  id: string;
+  username: string;
+  fullName: string;
+  roles: string[];
+}
+
+export async function getStaff(): Promise<StaffMember[]> {
+  const res = await fetch("/api/auth/staff");
+  if (!res.ok) throw new Error("Could not load staff list");
+  return (await res.json()) as StaffMember[];
+}
+
 export async function login(username: string, pin: string): Promise<LoginResult> {
   const res = await fetch("/api/auth/login", {
     method: "POST",

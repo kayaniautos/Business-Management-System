@@ -1,0 +1,143 @@
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap");
+
+/*
+ * Design tokens match the approved UI concept
+ * (https://claude.ai/code/artifact/ba934bdb-69f8-4233-a70a-c6c26412aeaf),
+ * including the accent color fix from that review (#c2410c, not the
+ * original #e8823a, which failed WCAG AA contrast against white text).
+ * 44px minimum touch target and glass-only-on-chrome-never-on-controls
+ * rules from that review carry over here too.
+ */
+:root {
+  --accent: #c2410c;
+  --ink-900: oklch(24% 0.03 260);
+  --ink-700: oklch(38% 0.025 260);
+  --ink-500: oklch(53% 0.02 260);
+  --ink-300: oklch(74% 0.012 260);
+  --line: oklch(88% 0.012 260 / 0.7);
+  --paper: oklch(98% 0.006 85);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink-900);
+  min-height: 100vh;
+  background-image: radial-gradient(700px 500px at 8% 0%, oklch(88% 0.06 55 / 0.35), transparent 55%),
+    radial-gradient(700px 550px at 100% 90%, oklch(86% 0.05 240 / 0.3), transparent 55%);
+  background-attachment: fixed;
+}
+
+h1,
+h2 {
+  font-family: "Sora", sans-serif;
+}
+
+button {
+  font-family: inherit;
+}
+
+.glass-card {
+  background: oklch(99% 0.004 85 / 0.62);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid oklch(100% 0 0 / 0.6);
+  box-shadow: 0 20px 50px oklch(30% 0.03 260 / 0.1);
+  border-radius: 24px;
+}
+
+.brand-logo {
+  height: 44px;
+  width: auto;
+}
+
+.staff-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px;
+  border-radius: 18px;
+  border: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  min-height: 44px;
+  font-family: inherit;
+}
+
+.staff-tile.selected {
+  border-color: var(--accent);
+  background: oklch(97% 0.02 55);
+}
+
+.staff-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Sora", sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  color: white;
+}
+
+.pin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid var(--ink-300);
+}
+.pin-dot.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.keypad-btn {
+  height: 64px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: white;
+  box-shadow: 0 4px 14px oklch(30% 0.03 260 / 0.08);
+  font-family: "Sora", sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--ink-900);
+  cursor: pointer;
+}
+.keypad-btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  border: none;
+  border-radius: 14px;
+  background: var(--accent);
+  color: white;
+  font-family: "Sora", sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 14px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error-text {
+  color: oklch(55% 0.18 25);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.muted {
+  color: var(--ink-500);
+}

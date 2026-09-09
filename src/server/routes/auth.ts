@@ -23,6 +23,19 @@ const loginResponseSchema = z.object({
 
 const errorResponseSchema = z.object({ error: z.string() });
 
+const staffListResponseSchema = z.array(
+  z.object({ id: z.string(), username: z.string(), fullName: z.string(), roles: z.array(z.string()) }),
+);
+
+async function rolesForUser(userId: string) {
+  const roleRows = await db
+    .select({ name: roles.name })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(eq(userRoles.userId, userId));
+  return roleRows.map((r) => r.name);
+}
+
 /**
  * `passwordHash` on `users` (src/db/schema/users.ts) holds a bcrypt hash of
  * the staff member's numeric PIN for this project — the schema was written
@@ -32,6 +45,27 @@ const errorResponseSchema = z.object({ error: z.string() });
  */
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  // Powers the "who's working?" staff picker on the login screen — no PIN
+  // entry is required to see who exists, only to unlock as them. Returns
+  // active staff only.
+  app.get(
+    "/staff",
+    { schema: { response: { 200: staffListResponseSchema } } },
+    async () => {
+      const activeUsers = await db.query.users.findMany({
+        where: (u, { eq }) => eq(u.isActive, true),
+      });
+      return Promise.all(
+        activeUsers.map(async (u) => ({
+          id: u.id,
+          username: u.username,
+          fullName: u.fullName,
+          roles: await rolesForUser(u.id),
+        })),
+      );
+    },
+  );
 
   app.post(
     "/login",
@@ -57,17 +91,11 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(401).send({ error: "Invalid username or PIN" });
       }
 
-      const roleRows = await db
-        .select({ name: roles.name })
-        .from(userRoles)
-        .innerJoin(roles, eq(userRoles.roleId, roles.id))
-        .where(eq(userRoles.userId, user.id));
-
       return {
         id: user.id,
         username: user.username,
         fullName: user.fullName,
-        roles: roleRows.map((r) => r.name),
+        roles: await rolesForUser(user.id),
       };
     },
   );
