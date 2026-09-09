@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
   salesDocuments,
@@ -12,6 +12,13 @@ import {
   parties,
 } from "../../db/schema/index.js";
 import { assignDocumentNumber } from "../services/document-numbers.js";
+import {
+  requireLegalEntity,
+  snapshotPartyTaxInfo,
+  requireControlPartsExist,
+  computeAndValidateTotals,
+  SalesDocumentValidationError,
+} from "../services/sales-document-helpers.js";
 
 const checkoutLineSchema = z.object({
   controlPartId: z.string().uuid(),
@@ -208,38 +215,21 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { legalEntityId, partyId, lines, discounts } = request.body;
 
-      const entity = await db.query.legalEntities.findFirst({
-        where: eq(legalEntities.id, legalEntityId),
-      });
-      if (!entity) {
-        return reply.code(400).send({ error: "Unknown legal entity" });
-      }
-
-      if (partyId) {
-        const party = await db.query.parties.findFirst({ where: eq(parties.id, partyId) });
-        if (!party) return reply.code(400).send({ error: "Unknown party" });
-      }
-
-      if (discounts.length > 0 && entity.name !== "Kiyani Autos") {
-        return reply
-          .code(400)
-          .send({ error: "Discounts are only available for Kiyani Autos sales" });
-      }
-
-      const partIds = [...new Set(lines.map((l) => l.controlPartId))];
-      const foundParts = await db
-        .select({ id: controlParts.id })
-        .from(controlParts)
-        .where(inArray(controlParts.id, partIds));
-      if (foundParts.length !== partIds.length) {
-        return reply.code(400).send({ error: "One or more parts were not found" });
-      }
-
-      const subtotal = lines.reduce((sum, l) => sum + l.quantity * l.unitGrossPrice, 0);
-      const discountTotal = discounts.reduce((sum, d) => sum + d.amount, 0);
-      const total = subtotal - discountTotal;
-      if (total < 0) {
-        return reply.code(400).send({ error: "Discount exceeds the sale total" });
+      let entity, subtotal, discountTotal, total;
+      try {
+        entity = await requireLegalEntity(legalEntityId);
+        await snapshotPartyTaxInfo(partyId);
+        await requireControlPartsExist(lines);
+        ({ subtotal, discountTotal, total } = computeAndValidateTotals(
+          entity.name,
+          lines,
+          discounts,
+        ));
+      } catch (err) {
+        if (err instanceof SalesDocumentValidationError) {
+          return reply.code(400).send({ error: err.message });
+        }
+        throw err;
       }
 
       const result = await db.transaction(async (tx) => {

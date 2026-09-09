@@ -10,6 +10,7 @@ import { entitiesRoutes } from "./routes/entities.js";
 import { salesRoutes } from "./routes/sales.js";
 import { inventoryRoutes } from "./routes/inventory.js";
 import { partiesRoutes } from "./routes/parties.js";
+import { quotationsRoutes } from "./routes/quotations.js";
 
 /**
  * First-pass Fastify backend for the vertical slice: real login against the
@@ -37,6 +38,7 @@ export function buildApp() {
   app.register(salesRoutes, { prefix: "/api/sales" });
   app.register(inventoryRoutes, { prefix: "/api/inventory" });
   app.register(partiesRoutes, { prefix: "/api/parties" });
+  app.register(quotationsRoutes, { prefix: "/api/quotations" });
 
   app.get("/api/health", async () => ({ ok: true }));
 
