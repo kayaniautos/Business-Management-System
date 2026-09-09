@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { LoginView } from "./LoginView.js";
 import { PosView } from "./PosView.js";
 import { QuotationView } from "./QuotationView.js";
+import { DeliveryNoteView } from "./DeliveryNoteView.js";
 import { InventoryView } from "./InventoryView.js";
 import { PartyView } from "./PartyView.js";
 import { SalesHistoryView } from "./SalesHistoryView.js";
@@ -37,6 +38,7 @@ export function App() {
       <AppHeader user={user} view={view} onViewChange={setView} />
       {view === "pos" && <PosView user={user} />}
       {view === "quotations" && <QuotationView />}
+      {view === "delivery-notes" && <DeliveryNoteView />}
       {view === "inventory" && <InventoryView />}
       {view === "parties" && <PartyView />}
       {view === "sales-history" && <SalesHistoryView />}

@@ -224,8 +224,10 @@ export interface SalesDocumentSummary {
 }
 
 export interface SalesDocumentDetail extends SalesDocumentSummary {
+  partyId: string | null;
   lines: {
     lineNumber: number;
+    controlPartId: string;
     partNumber: string;
     catalogName: string;
     displayName: string | null;
@@ -236,15 +238,21 @@ export interface SalesDocumentDetail extends SalesDocumentSummary {
   discounts: { label: string; amount: string }[];
 }
 
-export const getSalesHistory = (opts?: { legalEntityId?: string; q?: string }) => {
+export type SalesDocumentType = "quotation" | "delivery_note" | "invoice";
+
+export const getSalesHistory = (opts?: { legalEntityId?: string; q?: string; documentType?: SalesDocumentType }) => {
   const params = new URLSearchParams();
   if (opts?.legalEntityId) params.set("legalEntityId", opts.legalEntityId);
   if (opts?.q) params.set("q", opts.q);
+  if (opts?.documentType) params.set("documentType", opts.documentType);
   const qs = params.toString();
   return getJson<SalesDocumentSummary[]>(`/api/sales${qs ? `?${qs}` : ""}`);
 };
 
 export const getSalesDocument = (id: string) => getJson<SalesDocumentDetail>(`/api/sales/${id}`);
+
+export const postSalesDocument = (id: string) => postJson<SalesDocumentSummary>(`/api/sales/${id}/post`, {});
+export const unpostSalesDocument = (id: string) => postJson<SalesDocumentSummary>(`/api/sales/${id}/unpost`, {});
 
 export interface QuotationInput {
   legalEntityId: string;
@@ -260,3 +268,18 @@ export interface QuotationInput {
 
 export const createQuotation = (input: QuotationInput) =>
   postJson<CheckoutResult>("/api/quotations", input);
+
+export interface DeliveryNoteInput {
+  legalEntityId: string;
+  partyId?: string;
+  customerRef?: string;
+  ourRefNo?: string;
+  vehicleDetails?: string;
+  poNo?: string;
+  sourceQuotationId?: string;
+  lines: CheckoutLine[];
+  discounts: CheckoutDiscount[];
+}
+
+export const createDeliveryNote = (input: DeliveryNoteInput) =>
+  postJson<CheckoutResult>("/api/delivery-notes", input);
