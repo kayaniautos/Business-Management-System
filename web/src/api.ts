@@ -283,3 +283,33 @@ export interface DeliveryNoteInput {
 
 export const createDeliveryNote = (input: DeliveryNoteInput) =>
   postJson<CheckoutResult>("/api/delivery-notes", input);
+
+export interface StockAdjustment {
+  id: string;
+  controlPartId: string;
+  partNumber: string;
+  partName: string;
+  quantityDelta: number;
+  reasonComment: string;
+  createdAt: string;
+}
+
+export interface StockAdjustmentResult extends StockAdjustment {
+  quantityAfter: number;
+}
+
+export const getPartQuantity = (controlPartId: string) =>
+  getJson<{ controlPartId: string; quantity: number }>(
+    `/api/stock-adjustments/quantity/${controlPartId}`,
+  );
+
+export const getStockAdjustments = (q?: string) =>
+  getJson<StockAdjustment[]>(
+    `/api/stock-adjustments${q ? `?q=${encodeURIComponent(q)}` : ""}`,
+  );
+
+export const createStockAdjustment = (input: {
+  controlPartId: string;
+  quantityDelta: number;
+  reasonComment: string;
+}) => postJson<StockAdjustmentResult>("/api/stock-adjustments", input);

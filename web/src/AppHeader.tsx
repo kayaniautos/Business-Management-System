@@ -1,6 +1,13 @@
 import type { LoginResult } from "./api.js";
 
-export type View = "pos" | "quotations" | "delivery-notes" | "inventory" | "parties" | "sales-history";
+export type View =
+  | "pos"
+  | "quotations"
+  | "delivery-notes"
+  | "inventory"
+  | "parties"
+  | "sales-history"
+  | "stock-adjustments";
 
 const VIEW_LABELS: Record<View, string> = {
   pos: "POS Counter",
@@ -9,6 +16,7 @@ const VIEW_LABELS: Record<View, string> = {
   inventory: "Inventory",
   parties: "Parties",
   "sales-history": "Sales History (Ctrl+H)",
+  "stock-adjustments": "Stock Adjustment",
 };
 
 export function AppHeader({
@@ -37,7 +45,17 @@ export function AppHeader({
       <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
         <img src="/kt-logo.png" alt="Kiyan Traders" className="brand-logo" style={{ height: 36 }} />
         <nav style={{ display: "flex", gap: 6 }}>
-          {(["pos", "quotations", "delivery-notes", "inventory", "parties", "sales-history"] as const).map((v) => (
+          {(
+            [
+              "pos",
+              "quotations",
+              "delivery-notes",
+              "inventory",
+              "stock-adjustments",
+              "parties",
+              "sales-history",
+            ] as const
+          ).map((v) => (
             <button
               key={v}
               type="button"
