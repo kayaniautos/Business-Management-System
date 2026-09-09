@@ -32,12 +32,12 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: (user: LoginResult) => v
 
   function pressDigit(digit: string) {
     setError(null);
-    if (pin.length < MAX_PIN_LENGTH) setPin(pin + digit);
+    setPin((prev) => (prev.length < MAX_PIN_LENGTH ? prev + digit : prev));
   }
 
   function pressBackspace() {
     setError(null);
-    setPin(pin.slice(0, -1));
+    setPin((prev) => prev.slice(0, -1));
   }
 
   async function unlock() {
