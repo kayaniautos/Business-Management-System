@@ -5,6 +5,84 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-09 — Built real Delivery Note creation, plus generic Post/Unpost
+
+**Decision:** Built the second document type in the confirmed
+Quotation -> DN -> Invoice chain - `POST /api/delivery-notes`, using the
+same `sales_documents` table with `documentType: "delivery_note"`. Chosen
+next because it's the step that actually exercises `sales_document_links`
+(existed since the schema pass, only ever validated in a rolled-back test
+transaction until now) and because it's the first document that needs a
+real, user-facing Post/Unpost action - Invoice (checkout) posts itself
+immediately, Quotation never posts, so DN is the first place this pattern
+had to actually be built and used from the UI.
+
+**Key design choices:**
+- **Always created `status: "draft"`**, unlike checkout's Invoice - a DN
+  needs an explicit separate Post step, per the confirmed Post/Unpost
+  pattern (CLAUDE.md 5.9).
+- **Two entry modes in `DeliveryNoteView.tsx`**: "Prepare directly" (same
+  search-and-build-lines pattern as checkout/Quotation) and "From
+  Quotation." For the conversion path, **line selection is individual, not
+  whole-document** - the user checks which specific Quotation lines carry
+  over and can edit each selected line's quantity independently (e.g.
+  convert 2 of 5 units on one line, skip another line entirely). This
+  matches the confirmed spec directly (an Invoice can already draw
+  partially/combine across multiple DNs, so DN drawing partially from one
+  Quotation is the same shape of requirement, one level up the chain).
+- **Post/Unpost built generically on `sales_documents`**, not as a
+  DN-specific endpoint - `POST /api/sales/:id/post` and
+  `.../unpost` reject a Quotation outright (400, "Quotations are
+  informational and are never posted") and reject posting an
+  already-posted document or unposting a non-posted one. This means the
+  same two endpoints will work unmodified once Invoice-side manual
+  post/unpost is ever needed too, not just DN.
+- **Unposting does not clear `postedAt`.** Deliberately preserves the
+  audit fact that the document *was* posted at some point - only the
+  `status` flips back to `"unposted"` (a distinct value from `"draft"`,
+  already in the enum). `[unclear — confirm]` whether a separate
+  `unposted_at` timestamp is wanted later for a fuller audit trail.
+
+**Two real bugs caught and fixed during this work, neither from user
+feedback - both self-caught before/during verification:**
+1. **In the new code:** the "From Quotation" line-resolution logic
+   initially tried to submit a Quotation line's `partNumber` (a display
+   string like "CP-10042") as the DN line's `controlPartId`, because
+   `GET /api/sales/:id` never actually returned the real `controlPartId`
+   UUID in its line objects. Caught before any testing - fixed by adding
+   `controlPartId` to that endpoint's response schema, its Drizzle query,
+   and the frontend's `SalesDocumentDetail` type, instead of working
+   around the missing field.
+2. **In pre-existing code, found while browser-testing this feature:**
+   `LoginView.tsx`'s `pressDigit`/`pressBackspace` read `pin` directly
+   from closure (`setPin(pin + digit)`) rather than using React's
+   functional updater. Rapid consecutive PIN-pad taps landing in the same
+   render batch silently dropped earlier digits - confirmed directly by
+   firing four synthetic same-tick clicks (1-2-3-4) and observing the
+   actual network request carry `pin: "4"` instead of `"1234"`. This is a
+   real production risk for a touchscreen PIN pad meant for fast counter
+   use, not a testing artifact - a staff member tapping quickly enough
+   could get "Invalid PIN" on a correct PIN. Fixed to
+   `setPin((prev) => ...)` on both functions.
+
+**Verified end to end through the real UI** (not just curl, which is what
+the earlier backend-only pass for this feature had relied on): created a
+standalone DN (KT-DN-0002) via "Prepare directly"; created a Quotation
+with two lines (KT-QTN-0003); switched to "From Quotation," selected only
+one of its two lines, reduced that line's quantity from 5 to 2, and
+confirmed the running total updated to Rs 1000.00 (2 x Rs 500) before
+submitting (KT-DN-0003); confirmed via Ctrl+H that both entries appear in
+Sales History with correct status badges; opened KT-DN-0003 from Sales
+History and clicked Post, confirming the badge flipped to POSTED and the
+button flipped to Unpost; clicked Unpost, confirming the badge flipped to
+UNPOSTED and the button flipped back to Post; and confirmed the
+Quotation's own detail view shows no Post/Unpost button at all, matching
+the "Quotations are never posted" rule.
+
+**Source:** Mehmoon, 2026-09-09.
+
+---
+
 ## 2026-09-09 — Built real Quotation creation
 
 **Decision:** Built the first creation path for a document type other
