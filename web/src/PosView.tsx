@@ -2,11 +2,13 @@ import { useEffect, useState, type FormEvent } from "react";
 import {
   checkout,
   getEntities,
+  getParties,
   searchParts,
   type CheckoutDiscount,
   type CheckoutResult,
   type LegalEntity,
   type LoginResult,
+  type Party,
   type PartSearchResult,
 } from "./api.js";
 
@@ -23,6 +25,10 @@ const KIYANI_AUTOS = "Kiyani Autos";
 export function PosView({ user }: { user: LoginResult }) {
   const [entities, setEntities] = useState<LegalEntity[] | null>(null);
   const [entityId, setEntityId] = useState<string>("");
+  // Customer Receivable A/C (S3) parties only — the reading that a party
+  // needs that Nature to be a valid sale counterparty, per CLAUDE.md 5.5.
+  const [customers, setCustomers] = useState<Party[]>([]);
+  const [partyId, setPartyId] = useState<string>("");
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PartSearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -39,6 +45,7 @@ export function PosView({ user }: { user: LoginResult }) {
       setEntities(list);
       if (list.length > 0) setEntityId(list[0].id);
     });
+    getParties({ nature: "S3" }).then(setCustomers).catch(() => {});
   }, []);
 
   const selectedEntity = entities?.find((e) => e.id === entityId);
@@ -98,10 +105,12 @@ export function PosView({ user }: { user: LoginResult }) {
         entityId,
         cart.map((l) => ({ controlPartId: l.controlPartId, quantity: l.quantity, unitGrossPrice: l.unitGrossPrice })),
         canDiscount ? discounts : [],
+        partyId || undefined,
       );
       setCheckoutResult(result);
       setCart([]);
       setDiscounts([]);
+      setPartyId("");
     } catch (err) {
       setCheckoutError(err instanceof Error ? err.message : "Checkout failed");
     } finally {
@@ -155,6 +164,17 @@ export function PosView({ user }: { user: LoginResult }) {
 
         <div className="glass-card" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>Current sale</div>
+
+          <select
+            value={partyId}
+            onChange={(e) => setPartyId(e.target.value)}
+            style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
+          >
+            <option value="">Walk-in customer</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
 
           {cart.length === 0 && <div className="muted" style={{ fontSize: 13 }}>Cart is empty — search and add parts.</div>}
 

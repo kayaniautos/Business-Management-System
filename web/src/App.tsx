@@ -2,6 +2,7 @@ import { useState } from "react";
 import { LoginView } from "./LoginView.js";
 import { PosView } from "./PosView.js";
 import { InventoryView } from "./InventoryView.js";
+import { PartyView } from "./PartyView.js";
 import { AppHeader, type View } from "./AppHeader.js";
 import type { LoginResult } from "./api.js";
 
@@ -14,7 +15,9 @@ export function App() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <AppHeader user={user} view={view} onViewChange={setView} />
-      {view === "pos" ? <PosView user={user} /> : <InventoryView />}
+      {view === "pos" && <PosView user={user} />}
+      {view === "inventory" && <InventoryView />}
+      {view === "parties" && <PartyView />}
     </div>
   );
 }

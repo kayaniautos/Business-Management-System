@@ -167,13 +167,45 @@ export async function checkout(
   legalEntityId: string,
   lines: CheckoutLine[],
   discounts: CheckoutDiscount[],
+  partyId?: string,
 ): Promise<CheckoutResult> {
   const res = await fetch("/api/sales/checkout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ legalEntityId, lines, discounts }),
+    body: JSON.stringify({ legalEntityId, partyId, lines, discounts }),
   });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? "Checkout failed");
   return body as CheckoutResult;
 }
+
+export type PartyStatus = "C1" | "C2" | "C3";
+export type PartyNature = "S1" | "S2" | "S3";
+
+export interface Party {
+  id: string;
+  name: string;
+  printName: string | null;
+  gstNo: string | null;
+  ntnNo: string | null;
+  status: PartyStatus;
+  nature: PartyNature;
+  phoneNumbers: string[];
+}
+
+export const getParties = (opts?: { q?: string; nature?: PartyNature }) => {
+  const params = new URLSearchParams();
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.nature) params.set("nature", opts.nature);
+  const qs = params.toString();
+  return getJson<Party[]>(`/api/parties${qs ? `?${qs}` : ""}`);
+};
+
+export const createParty = (party: {
+  name: string;
+  status: PartyStatus;
+  nature: PartyNature;
+  gstNo?: string;
+  ntnNo?: string;
+  phoneNumbers: string[];
+}) => postJson<Party>("/api/parties", party);
