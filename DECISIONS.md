@@ -5,6 +5,83 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-09 — Fastify over Express; built the first real running vertical slice
+
+**Context:** Mehmoon asked when the app would actually be usable/visible,
+not just schema and a static mockup. Correct observation - everything
+built so far only existed as SQL-visible schema or a non-interactive
+design concept. Agreed to pause adding schema breadth and prove one real
+path end to end instead: real login, real search, real Postgres, running
+in a browser.
+
+**Decision: Fastify, not Express**, for the backend (CLAUDE.md section 3
+listed both as options, undecided). Discussed first rather than picked
+silently, per the standing "ask before architecture decisions" rule.
+Reasoning:
+- The usual Fastify-over-Express argument (2-3x raw throughput) doesn't
+  apply here - this serves a handful of terminals in one shop talking to
+  a local Postgres on the same machine, not internet-scale traffic.
+- What does apply: this app is essentially dozens of structured forms
+  (Forms A-G). Fastify's built-in Zod-based request validation with type
+  inference pays off repeatedly across that many endpoints; Express needs
+  a bolt-on library for the same thing.
+- Consistency with the Drizzle-over-Prisma rationale already in this
+  file: "lighter runtime, better fit for the background sync worker" -
+  same philosophy, already decided once.
+- Faster startup / smaller footprint fits an Electron-embedded backend
+  that spins up fresh every time a shop terminal launches.
+- Express's real advantage (larger ecosystem, more third-party middleware)
+  mostly doesn't get used here - this is a closed, single-tenant app with
+  no third-party integrations beyond Supabase and eventually FBR's API.
+
+**Implementation choices made without a separate ask** (lower-stakes,
+logged for visibility, not treated as architecture decisions needing
+sign-off):
+- **Zod** for request/response validation (`fastify-type-provider-zod`) -
+  a common, well-supported pairing with Fastify.
+- **bcryptjs**, not the native `bcrypt` package, to hash PINs - pure JS,
+  no compiled binary, for the exact same "clean Electron packaging"
+  reason Prisma was ruled out. `users.passwordHash` (written generically
+  before the PIN-pad login concept existed) now explicitly holds a bcrypt
+  hash of the numeric PIN.
+- **Vite + plain React in the browser first, Electron later.** Fastest
+  path to something real and clickable today; Electron is just a shell
+  around the same frontend, so wrapping it can happen once there's more
+  to wrap.
+- Frontend lives in `web/` (separate from `src/`, which is NodeNext-mode
+  for the backend) with its own `tsconfig.json` (bundler resolution,
+  JSX) so the two don't fight over module resolution settings.
+
+**What got built** (`src/server/`, `web/`):
+- `POST /api/auth/login` - real bcrypt check against `users`, returns the
+  user's actual roles via a real join through `user_roles`/`roles`.
+- `GET /api/parts/search` - real query against `control_parts`, joined to
+  `items`/`markers` for context and `part_car_models`/`car_models` for
+  fitment. Deliberately does NOT return a stock/quantity number - no
+  inventory ledger exists yet, and the earlier UI mockup's fake stock
+  numbers were exactly the kind of invented data this pass was meant to
+  stop doing.
+- `src/db/seed-dev-data.ts` - a NEW, separate seed script for local-dev-
+  only sample data (one demo user, two sample parts, one fitment link) -
+  kept separate from `seed.ts` specifically so that file's "only
+  confirmed business data" scope stays honest.
+- A minimal React frontend (login screen, search screen) calling both
+  endpoints for real, proxied through Vite in dev.
+
+**Verified by actually using it**, not just curling it: logged in through
+the real browser UI with a wrong PIN (rejected), the right PIN (real user
+name and role appeared), searched for a real part (correct results with
+fitment), and searched for a non-existent part (correct empty state).
+
+**Explicitly not done in this pass:** no visual styling matching the
+approved design concept, no session/token handling (login just returns
+the user object for now - fine for a local desktop app, not something to
+carry into a hosted context unmodified), no Electron packaging yet.
+
+**Source:** Mehmoon, 2026-09-09.
+
+---
+
 ## 2026-09-09 — Built first-pass Sales document chain (Quotation/DN/Invoice)
 
 **Decision:** Built `sales_documents`, `sales_document_lines`,
