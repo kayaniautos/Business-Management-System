@@ -68,9 +68,17 @@ const salesDocumentSummarySchema = z.object({
 });
 
 const salesDocumentDetailSchema = salesDocumentSummarySchema.extend({
+  // Needed by the "convert from Quotation" flow (delivery-notes.ts's
+  // frontend) to pre-select the customer — not on the summary schema,
+  // which only needs the display name for the history list.
+  partyId: z.string().nullable(),
   lines: z.array(
     z.object({
       lineNumber: z.number(),
+      // Needed by the "convert from Quotation" flow to actually submit a
+      // valid controlPartId (partNumber/catalogName alone aren't enough
+      // to identify the part on the new document).
+      controlPartId: z.string(),
       partNumber: z.string(),
       catalogName: z.string(),
       displayName: z.string().nullable(),
@@ -109,13 +117,14 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
       schema: {
         querystring: z.object({
           legalEntityId: z.string().uuid().optional(),
+          documentType: z.enum(["quotation", "delivery_note", "invoice"]).optional(),
           q: z.string().optional(),
         }),
         response: { 200: z.array(salesDocumentSummarySchema) },
       },
     },
     async (request) => {
-      const { legalEntityId, q } = request.query;
+      const { legalEntityId, documentType, q } = request.query;
       const rows = await db
         .select({
           id: salesDocuments.id,
@@ -135,6 +144,7 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
         .where(
           and(
             legalEntityId ? eq(salesDocuments.legalEntityId, legalEntityId) : undefined,
+            documentType ? eq(salesDocuments.documentType, documentType) : undefined,
             q
               ? or(
                   ilike(salesDocuments.documentNumber, `%${q}%`),
@@ -166,6 +176,7 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
           documentType: salesDocuments.documentType,
           documentNumber: salesDocuments.documentNumber,
           entityName: legalEntities.name,
+          partyId: salesDocuments.partyId,
           partyName: parties.name,
           documentDate: salesDocuments.documentDate,
           subtotalAmount: salesDocuments.subtotalAmount,
@@ -183,6 +194,7 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
       const lineRows = await db
         .select({
           lineNumber: salesDocumentLines.lineNumber,
+          controlPartId: controlParts.id,
           partNumber: controlParts.partNumber,
           catalogName: controlParts.name,
           displayName: salesDocumentLines.displayName,
@@ -203,6 +215,76 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
       return { ...header, lines: lineRows, discounts: discountRows };
     },
   );
+
+  /**
+   * Post/Unpost (CLAUDE.md 5.9): applies to every transactional document
+   * except Quotation, which never posts (handled in quotations.ts by
+   * simply never setting status to "posted"). Generic here, not DN-
+   * specific, since the pattern applies to any sales_documents row - the
+   * first real user of this is Delivery Notes, since Invoice (checkout)
+   * posts itself immediately and Quotation never posts.
+   *
+   * `unposted` is a distinct status from `draft` (not just "un-posted
+   * back to draft") - it's meant to preserve that the document WAS
+   * posted at some point, for audit purposes (CLAUDE.md 2.6). `postedAt`
+   * is deliberately left as-is on unpost (the historical record of when
+   * it was posted), not cleared - there's no `unpostedAt` column to
+   * record the reversal time, a gap worth knowing about, not fixed here.
+   */
+  app.post(
+    "/:id/post",
+    { schema: { params: z.object({ id: z.string().uuid() }), response: { 200: salesDocumentSummarySchema, 400: errorResponseSchema, 404: errorResponseSchema } } },
+    async (request, reply) => {
+      const doc = await db.query.salesDocuments.findFirst({ where: eq(salesDocuments.id, request.params.id) });
+      if (!doc) return reply.code(404).send({ error: "Document not found" });
+      if (doc.documentType === "quotation") {
+        return reply.code(400).send({ error: "Quotations are informational and are never posted" });
+      }
+      if (doc.status === "posted") {
+        return reply.code(400).send({ error: "Already posted" });
+      }
+      await db
+        .update(salesDocuments)
+        .set({ status: "posted", postedAt: new Date() })
+        .where(eq(salesDocuments.id, doc.id));
+      return summarizeDocument(doc.id);
+    },
+  );
+
+  app.post(
+    "/:id/unpost",
+    { schema: { params: z.object({ id: z.string().uuid() }), response: { 200: salesDocumentSummarySchema, 400: errorResponseSchema, 404: errorResponseSchema } } },
+    async (request, reply) => {
+      const doc = await db.query.salesDocuments.findFirst({ where: eq(salesDocuments.id, request.params.id) });
+      if (!doc) return reply.code(404).send({ error: "Document not found" });
+      if (doc.status !== "posted") {
+        return reply.code(400).send({ error: "Only a posted document can be unposted" });
+      }
+      await db.update(salesDocuments).set({ status: "unposted" }).where(eq(salesDocuments.id, doc.id));
+      return summarizeDocument(doc.id);
+    },
+  );
+
+  async function summarizeDocument(id: string) {
+    const [row] = await db
+      .select({
+        id: salesDocuments.id,
+        documentType: salesDocuments.documentType,
+        documentNumber: salesDocuments.documentNumber,
+        entityName: legalEntities.name,
+        partyName: parties.name,
+        documentDate: salesDocuments.documentDate,
+        subtotalAmount: salesDocuments.subtotalAmount,
+        discountTotal: salesDocuments.discountTotal,
+        totalAmount: salesDocuments.totalAmount,
+        status: salesDocuments.status,
+      })
+      .from(salesDocuments)
+      .innerJoin(legalEntities, eq(salesDocuments.legalEntityId, legalEntities.id))
+      .leftJoin(parties, eq(salesDocuments.partyId, parties.id))
+      .where(eq(salesDocuments.id, id));
+    return row;
+  }
 
   app.post(
     "/checkout",
