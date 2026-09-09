@@ -9,6 +9,7 @@ import {
   salesDocumentDiscounts,
   legalEntities,
   controlParts,
+  parties,
 } from "../../db/schema/index.js";
 import { assignDocumentNumber } from "../services/document-numbers.js";
 
@@ -26,6 +27,9 @@ const checkoutDiscountSchema = z.object({
 
 const checkoutBodySchema = z.object({
   legalEntityId: z.string().uuid(),
+  // Walk-in when omitted (CLAUDE.md 5.10 / the POS mockup's "Walk-in
+  // customer" default) — partyId stays null on the created document.
+  partyId: z.string().uuid().optional(),
   lines: z.array(checkoutLineSchema).min(1),
   // Max 2 per CLAUDE.md 5.10 ("Kiyani Autos only, max 2") — the
   // Kiyani-Autos-only part is checked in the handler, not the schema,
@@ -51,9 +55,10 @@ const errorResponseSchema = z.object({ error: z.string() });
  * Quotation/DN/corporate-invoice document-chain flow, not this).
  *
  * No tax computation (CLAUDE.md 5.10: not built yet - lineTaxAmount and
- * taxTotal are always 0 here). No party attached yet (walk-in only for
- * this pass - `partyId` stays null). Amounts are recomputed server-side
- * from quantity * unitGrossPrice, never trusted from the client.
+ * taxTotal are always 0 here). `partyId` is optional - a sale can attach
+ * to a real party or stay walk-in (null), matching the POS mockup's
+ * "Walk-in customer" default. Amounts are recomputed server-side from
+ * quantity * unitGrossPrice, never trusted from the client.
  */
 export const salesRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -67,13 +72,18 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { legalEntityId, lines, discounts } = request.body;
+      const { legalEntityId, partyId, lines, discounts } = request.body;
 
       const entity = await db.query.legalEntities.findFirst({
         where: eq(legalEntities.id, legalEntityId),
       });
       if (!entity) {
         return reply.code(400).send({ error: "Unknown legal entity" });
+      }
+
+      if (partyId) {
+        const party = await db.query.parties.findFirst({ where: eq(parties.id, partyId) });
+        if (!party) return reply.code(400).send({ error: "Unknown party" });
       }
 
       if (discounts.length > 0 && entity.name !== "Kiyani Autos") {
@@ -107,6 +117,7 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
             documentType: "invoice",
             documentNumber,
             legalEntityId,
+            partyId,
             documentDate: new Date().toISOString().slice(0, 10),
             subtotalAmount: subtotal.toFixed(2),
             discountTotal: discountTotal.toFixed(2),
