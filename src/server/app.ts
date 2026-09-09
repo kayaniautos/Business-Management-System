@@ -6,6 +6,8 @@ import {
 } from "fastify-type-provider-zod";
 import { authRoutes } from "./routes/auth.js";
 import { partsRoutes } from "./routes/parts.js";
+import { entitiesRoutes } from "./routes/entities.js";
+import { salesRoutes } from "./routes/sales.js";
 
 /**
  * First-pass Fastify backend for the vertical slice: real login against the
@@ -29,6 +31,8 @@ export function buildApp() {
 
   app.register(authRoutes, { prefix: "/api/auth" });
   app.register(partsRoutes, { prefix: "/api/parts" });
+  app.register(entitiesRoutes, { prefix: "/api/entities" });
+  app.register(salesRoutes, { prefix: "/api/sales" });
 
   app.get("/api/health", async () => ({ ok: true }));
 
