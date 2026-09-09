@@ -245,3 +245,18 @@ export const getSalesHistory = (opts?: { legalEntityId?: string; q?: string }) =
 };
 
 export const getSalesDocument = (id: string) => getJson<SalesDocumentDetail>(`/api/sales/${id}`);
+
+export interface QuotationInput {
+  legalEntityId: string;
+  partyId?: string;
+  customerRef?: string;
+  ourRefNo?: string;
+  vehicleDetails?: string;
+  poNo?: string;
+  validUntil?: string;
+  lines: CheckoutLine[];
+  discounts: CheckoutDiscount[];
+}
+
+export const createQuotation = (input: QuotationInput) =>
+  postJson<CheckoutResult>("/api/quotations", input);
