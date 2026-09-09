@@ -5,6 +5,70 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-10 — Built real Stock Adjustment (Form F), plus the first stock-quantity ledger
+
+**Decision:** Built Stock Adjustment (CLAUDE.md 5.7) over the other two
+candidates on the table (Invoice-from-DN, Deal Part) - Mehmoon's choice.
+Doing this properly required first introducing something that didn't
+exist anywhere in the schema: a tracked stock quantity. Every sales
+feature built so far (checkout, Quotation, DN) lets staff "sell" parts
+without ever touching a quantity-on-hand figure, because none existed -
+this was a real gap, not a design choice, and had to be closed before
+Stock Adjustment could show "current qty" at all, per the client's own
+described flow.
+
+**Key design choices:**
+- **Asked before building on top of the gap.** Rather than silently
+  picking a schema shape for stock tracking, presented the two real
+  options - a single mutable `quantity_on_hand` column vs. an append-only
+  movement ledger - and Mehmoon chose the ledger.
+- **New `stock_movements` table** (`src/db/schema/stock-movements.ts`):
+  current quantity for a part is `SUM(quantity_delta)` over its rows, not
+  a stored running number. Chosen over a mutable column because it
+  matches the client's own audit-trail requirement for this exact form
+  and avoids a schema rewrite once LIFO cost layers (CLAUDE.md "LIFO must
+  be deliberate") are eventually built - those will also want a
+  per-movement record, not a single number that gets overwritten.
+- **`movementType` enum has only `"adjustment"` today.** Deliberately not
+  building sale/purchase movement types now - checkout, Quotation, and DN
+  still don't touch this table. Adding those integrations is separate,
+  future work, not part of this pass.
+- **No draft/post lifecycle for the adjustment itself.** The client's own
+  notes describe a single-step flow (pick item, see qty, enter delta and
+  a comment, done) unlike Quotation/DN/Invoice's confirmed Post/Unpost
+  pattern. Built that way rather than inventing an approval gate the
+  client didn't ask for - flagged as `[unclear — confirm]` in case one is
+  actually wanted.
+- **"On posting, SAP is adjusted as a consequence" (client's note) was
+  NOT built.** SAP doesn't exist as a schema field anywhere - Form A,
+  RPP, and SAP were never built - and its exact business definition is
+  still flagged as unconfirmed (CLAUDE.md 5.11 glossary). Adding a
+  guessed-at SAP column just to make that line true would mean building
+  on a concept nobody has confirmed the meaning of yet.
+- **"Mandatory, detailed comment" enforced as non-empty text only** - the
+  client's notes don't give a specific length or format for "detailed,"
+  so no arbitrary character minimum was invented. Left to staff
+  discretion/training instead of a guessed-at rule.
+- **History list intentionally does not show a per-row running balance.**
+  It's capped at the most recent 100 rows across all parts; a balance
+  computed only from that window would be wrong for any part with older
+  movements outside it. "Current quantity" is only ever reported freshly
+  computed from the full ledger, never approximated from a partial page.
+
+**Verified end to end through the real UI** (plus curl for the two
+validation-rejection cases): searched and selected a real part with zero
+recorded movements, confirmed the screen showed "Current quantity: 0";
+adjusted +25 with a reason comment and confirmed the screen updated to
+25 and the new row appeared in the history list; adjusted -8 with a
+different comment and confirmed the screen updated to 17 and both
+entries show newest-first with correct signs; separately confirmed via
+curl that a zero-delta adjustment and an empty reason comment are both
+rejected with 400.
+
+**Source:** Mehmoon, 2026-09-10.
+
+---
+
 ## 2026-09-09 — Built real Delivery Note creation, plus generic Post/Unpost
 
 **Decision:** Built the second document type in the confirmed
