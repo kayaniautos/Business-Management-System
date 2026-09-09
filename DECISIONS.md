@@ -5,6 +5,62 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-09 — Built the real Inventory screen (markers/items/control parts CRUD)
+
+**Decision:** Built full CRUD for the three-step inventory structure plus
+car-model fitment, completing the original 3-screen UI concept with a
+real counterpart for the one screen that didn't have one yet (Login and
+POS already did).
+
+**Deliberately built against the schema exactly as it exists**, not a
+redesign: `control_parts.itemId` stays a single required FK (one item
+owns a control part), even though the client's actual notes (CLAUDE.md
+5.3) describe control parts attaching to multiple items. That relationship
+is already flagged `[unclear — confirm]` pending a client walkthrough
+(CLAUDE.md 5.2) - building a CRUD UI is not the moment to quietly resolve
+an open schema question. If/when that conversation happens and the
+relationship changes, this UI will need to change with it.
+
+**API surface** (`src/server/routes/inventory.ts`): list/create for
+markers, items, control parts, and car models, plus attach/detach
+endpoints for control-part-to-car-model fitment. List endpoints return
+joined context (an item's marker, a control part's parent part number and
+fitment list) using the same two-query-then-merge-in-JS pattern already
+used in the parts-search endpoint, rather than reaching for Drizzle's
+relational query API (no `relations()` helpers exist on this schema yet).
+
+**Caught and fixed before shipping:** a real bug in the fitment-delete
+route - `eq(a, x) && eq(b, y)` was used instead of Drizzle's `and()`
+helper. Both `eq()` calls return truthy SQL objects, so `&&` silently
+evaluated to just the second condition, meaning the delete would have
+matched on `carModelId` alone and could delete a fitment link belonging
+to a different control part. Fixed before it was ever run against real
+data.
+
+**Frontend:** new `AppHeader.tsx` (nav bar) and `InventoryView.tsx`,
+wired into `App.tsx` alongside the existing `PosView.tsx`. Mirrors the
+original static mockup's structure (markers rail -> items row -> control
+parts list with parent/child + fitment tags) but now backed by real data
+and real writes.
+
+**Verified in-browser**: created a real marker, drilled into a real item,
+added a new variant control part with a parent link (showed "Variant of
+CP-10042" correctly), and attached fitment both to an existing car model
+and to a brand-new one created inline - all confirmed matching in the
+database afterward.
+
+**One quirk worth noting, not fixed:** during rapid automated testing, one
+fitment-attach request showed as aborted in the browser's network panel
+and its tag didn't render immediately, even though the write had actually
+succeeded (confirmed in the database) and rendered correctly after a page
+reload. Reads as a display-timing artifact from firing UI actions faster
+than a human would, not a real persistence bug - flagged in CLAUDE.md in
+case it recurs under normal use, not treated as resolved or as broken.
+
+**Source:** Mehmoon, 2026-09-09.
+
+---
+
 ## 2026-09-09 — Built real POS checkout: cart, entity-gated discounts, a real posted invoice
 
 **Decision:** Extended the POS screen from search-only to a full checkout,
