@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { eq, inArray } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
   salesDocuments,
@@ -47,6 +47,34 @@ const checkoutResponseSchema = z.object({
 
 const errorResponseSchema = z.object({ error: z.string() });
 
+const salesDocumentSummarySchema = z.object({
+  id: z.string(),
+  documentType: z.string(),
+  documentNumber: z.string(),
+  entityName: z.string(),
+  partyName: z.string().nullable(),
+  documentDate: z.string(),
+  subtotalAmount: z.string(),
+  discountTotal: z.string(),
+  totalAmount: z.string(),
+  status: z.string(),
+});
+
+const salesDocumentDetailSchema = salesDocumentSummarySchema.extend({
+  lines: z.array(
+    z.object({
+      lineNumber: z.number(),
+      partNumber: z.string(),
+      catalogName: z.string(),
+      displayName: z.string().nullable(),
+      quantity: z.number(),
+      unitGrossPrice: z.string(),
+      lineGrossAmount: z.string(),
+    }),
+  ),
+  discounts: z.array(z.object({ label: z.string(), amount: z.string() })),
+});
+
 /**
  * First real POS checkout: creates an actual `sales_documents` row
  * (type "invoice") with real lines and discounts, immediately posted -
@@ -62,6 +90,112 @@ const errorResponseSchema = z.object({ error: z.string() });
  */
 export const salesRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  /**
+   * Sales history — first real way to see a sale again after checkout
+   * creates it (previously only visible via a direct SQL query). `q`
+   * matches document number or party name; newest first.
+   */
+  app.get(
+    "/",
+    {
+      schema: {
+        querystring: z.object({
+          legalEntityId: z.string().uuid().optional(),
+          q: z.string().optional(),
+        }),
+        response: { 200: z.array(salesDocumentSummarySchema) },
+      },
+    },
+    async (request) => {
+      const { legalEntityId, q } = request.query;
+      const rows = await db
+        .select({
+          id: salesDocuments.id,
+          documentType: salesDocuments.documentType,
+          documentNumber: salesDocuments.documentNumber,
+          entityName: legalEntities.name,
+          partyName: parties.name,
+          documentDate: salesDocuments.documentDate,
+          subtotalAmount: salesDocuments.subtotalAmount,
+          discountTotal: salesDocuments.discountTotal,
+          totalAmount: salesDocuments.totalAmount,
+          status: salesDocuments.status,
+        })
+        .from(salesDocuments)
+        .innerJoin(legalEntities, eq(salesDocuments.legalEntityId, legalEntities.id))
+        .leftJoin(parties, eq(salesDocuments.partyId, parties.id))
+        .where(
+          and(
+            legalEntityId ? eq(salesDocuments.legalEntityId, legalEntityId) : undefined,
+            q
+              ? or(
+                  ilike(salesDocuments.documentNumber, `%${q}%`),
+                  ilike(parties.name, `%${q}%`),
+                )
+              : undefined,
+          ),
+        )
+        .orderBy(desc(salesDocuments.createdAt))
+        .limit(200);
+
+      return rows;
+    },
+  );
+
+  app.get(
+    "/:id",
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        response: { 200: salesDocumentDetailSchema, 404: errorResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const [header] = await db
+        .select({
+          id: salesDocuments.id,
+          documentType: salesDocuments.documentType,
+          documentNumber: salesDocuments.documentNumber,
+          entityName: legalEntities.name,
+          partyName: parties.name,
+          documentDate: salesDocuments.documentDate,
+          subtotalAmount: salesDocuments.subtotalAmount,
+          discountTotal: salesDocuments.discountTotal,
+          totalAmount: salesDocuments.totalAmount,
+          status: salesDocuments.status,
+        })
+        .from(salesDocuments)
+        .innerJoin(legalEntities, eq(salesDocuments.legalEntityId, legalEntities.id))
+        .leftJoin(parties, eq(salesDocuments.partyId, parties.id))
+        .where(eq(salesDocuments.id, id));
+
+      if (!header) return reply.code(404).send({ error: "Sale not found" });
+
+      const lineRows = await db
+        .select({
+          lineNumber: salesDocumentLines.lineNumber,
+          partNumber: controlParts.partNumber,
+          catalogName: controlParts.name,
+          displayName: salesDocumentLines.displayName,
+          quantity: salesDocumentLines.quantity,
+          unitGrossPrice: salesDocumentLines.unitGrossPrice,
+          lineGrossAmount: salesDocumentLines.lineGrossAmount,
+        })
+        .from(salesDocumentLines)
+        .innerJoin(controlParts, eq(salesDocumentLines.controlPartId, controlParts.id))
+        .where(eq(salesDocumentLines.salesDocumentId, id))
+        .orderBy(salesDocumentLines.lineNumber);
+
+      const discountRows = await db
+        .select({ label: salesDocumentDiscounts.label, amount: salesDocumentDiscounts.amount })
+        .from(salesDocumentDiscounts)
+        .where(eq(salesDocumentDiscounts.salesDocumentId, id));
+
+      return { ...header, lines: lineRows, discounts: discountRows };
+    },
+  );
 
   app.post(
     "/checkout",
