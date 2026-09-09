@@ -1,5 +1,18 @@
 import { useEffect, useState } from "react";
-import { getSalesDocument, getSalesHistory, type SalesDocumentDetail, type SalesDocumentSummary } from "./api.js";
+import {
+  getSalesDocument,
+  getSalesHistory,
+  postSalesDocument,
+  unpostSalesDocument,
+  type SalesDocumentDetail,
+  type SalesDocumentSummary,
+} from "./api.js";
+
+const STATUS_COLORS: Record<string, string> = {
+  draft: "var(--ink-500)",
+  posted: "oklch(45% 0.13 150)",
+  unposted: "oklch(55% 0.18 25)",
+};
 
 /**
  * Opened via the Ctrl+H shortcut (App.tsx) or the nav tab — the first way
@@ -27,6 +40,28 @@ export function SalesHistoryView() {
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load sale");
+    }
+  }
+
+  async function handlePost() {
+    if (!selected) return;
+    try {
+      await postSalesDocument(selected.id);
+      await openDetail(selected.id);
+      load(q);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not post document");
+    }
+  }
+
+  async function handleUnpost() {
+    if (!selected) return;
+    try {
+      await unpostSalesDocument(selected.id);
+      await openDetail(selected.id);
+      load(q);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not unpost document");
     }
   }
 
@@ -63,6 +98,8 @@ export function SalesHistoryView() {
               </div>
               <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
                 {r.entityName} &middot; {r.partyName ?? "Walk-in customer"} &middot; {r.documentDate}
+                {" · "}
+                <span style={{ color: STATUS_COLORS[r.status] ?? "inherit", fontWeight: 700 }}>{r.status}</span>
               </div>
             </button>
           ))}
@@ -73,7 +110,23 @@ export function SalesHistoryView() {
         <div className="glass-card" style={{ width: 360, flexShrink: 0, padding: 20, overflowY: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{ fontFamily: "Sora, sans-serif", fontWeight: 800, fontSize: 16 }}>{selected.documentNumber}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontFamily: "Sora, sans-serif", fontWeight: 800, fontSize: 16 }}>{selected.documentNumber}</span>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.3,
+                    color: STATUS_COLORS[selected.status] ?? "inherit",
+                    border: `1px solid ${STATUS_COLORS[selected.status] ?? "var(--line)"}`,
+                    borderRadius: 6,
+                    padding: "2px 6px",
+                  }}
+                >
+                  {selected.status}
+                </span>
+              </div>
               <div className="muted" style={{ fontSize: 12 }}>
                 {selected.entityName} &middot; {selected.partyName ?? "Walk-in customer"} &middot; {selected.documentDate}
               </div>
@@ -82,6 +135,34 @@ export function SalesHistoryView() {
               &times;
             </button>
           </div>
+
+          {selected.documentType !== "quotation" && (
+            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+              {(selected.status === "draft" || selected.status === "unposted") && (
+                <button type="button" className="btn-primary" style={{ flex: 1, padding: "10px 0", fontSize: 13 }} onClick={handlePost}>
+                  Post
+                </button>
+              )}
+              {selected.status === "posted" && (
+                <button
+                  type="button"
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    fontSize: 13,
+                    borderRadius: 10,
+                    border: "1px solid var(--line)",
+                    background: "white",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                  onClick={handleUnpost}
+                >
+                  Unpost
+                </button>
+              )}
+            </div>
+          )}
 
           <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
             {selected.lines.map((line) => (
