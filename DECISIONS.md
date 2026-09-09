@@ -5,6 +5,44 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-09 — Built Sales History, opened with Ctrl+H
+
+**Decision:** Built the first way to see a sale again after checkout
+creates it. Every invoice (`KA-INV-0001`, `KT-INV-0001`, etc.) had only
+ever been visible via a direct SQL query run for Mehmoon - a real shop
+needs to look one up itself.
+
+**API** (`src/server/routes/sales.ts`): `GET /` lists `sales_documents`
+joined to entity and party name, newest first, with an optional `q`
+matching document number or party name and an optional `legalEntityId`
+filter. `GET /:id` returns the full detail - header plus line items
+(joined to the catalog for part number/name) and discount rows.
+
+**Ctrl+H shortcut**: Mehmoon asked for the history to open with Ctrl+H
+specifically. Implemented as a `window` keydown listener in `App.tsx`
+with `preventDefault()` (Ctrl+H would otherwise open the browser's own
+History page) - matches the F1-F9 lookup-shortcut convention already
+confirmed for this project (CLAUDE.md 5.9), just extended to a
+whole-screen lookup rather than a per-field one. **Not the final
+implementation** - this is a page-level keydown handler because the app
+currently runs in a browser tab for dev purposes; once this moves into
+the actual Electron shell, Ctrl+H should become a proper menu
+accelerator (Electron's `globalShortcut` or a menu item `accelerator`),
+which is more reliable and doesn't depend on the page having focus.
+Still added to the nav bar too, for discoverability and mouse users -
+per CLAUDE.md's own "non-technical staff" constraint, a shortcut alone
+isn't enough.
+
+**Verified end to end**: pressed the actual Ctrl+H key combination (not
+just clicked the nav tab) and confirmed it opened the screen, confirmed
+every invoice created across this session's testing lists correctly,
+and opened one invoice's detail panel to confirm its line items,
+quantities, prices, and total all match what's in the database.
+
+**Source:** Mehmoon, 2026-09-09.
+
+---
+
 ## 2026-09-09 — Built Party management and wired it into checkout
 
 **Decision:** Built the first real CRUD for the Party Form (CLAUDE.md
