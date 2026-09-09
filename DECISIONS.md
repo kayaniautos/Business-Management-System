@@ -5,6 +5,53 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-09 — Built real Quotation creation
+
+**Decision:** Built the first creation path for a document type other
+than Invoice - `POST /api/quotations`, using the existing `sales_documents`
+table with `documentType: "quotation"`. Chosen over Stock Adjustment (the
+other candidate on the table) because it closes a real gap: Kiyan
+Traders' described workflow is corporate customers buying on credit via
+Quotation -> DN -> Invoice, and until now the only real sale-creation path
+was POS-style immediate checkout, which doesn't match how KT actually
+says it operates.
+
+**Key design choices:**
+- **Always `status: "draft"`, never `"posted"`.** CLAUDE.md 5.10/handover
+  8.1 are explicit that a Quotation "is just a subsidiary record and
+  requires no accounting" - the one document in the chain that doesn't
+  follow post/unpost. No `postedAt` is ever set.
+- **Extracted real shared logic into
+  `src/server/services/sales-document-helpers.ts`** - party GST/NTN
+  snapshotting, control-part existence checks, and the subtotal/discount/
+  total math were identical between checkout and quotation creation (not
+  superficially similar, the actual same rules), so this is genuine
+  duplication removal, not premature abstraction. Checkout was refactored
+  to use the same helpers and re-verified afterward to make sure nothing
+  regressed.
+- **Party stays optional** on a Quotation, matching Invoice, rather than
+  guessing it should be required - `[unclear — confirm]`.
+- **Reused the Kiyani-Autos-only discount rule** on Quotations too, for
+  consistency with the document chain's "identical behavior" convention
+  (CLAUDE.md 5.9) - but that rule was only ever confirmed for a "sale"
+  (checkout), not explicitly for Quotations. Flagged, not assumed silently.
+- **Confirmed Quotation-specific fields work**: Customer Ref, Our Ref
+  No., P.O. No., Vehicle Details, Validity - all already existed on
+  `sales_documents` from the original schema pass, so no schema changes
+  were needed for this feature at all.
+
+**Verified end to end through the real UI** (not just curl): selected a
+real entity and customer, searched and added a real part, entered a PO
+number, created the quotation, confirmed the regression test on checkout
+still passes after the refactor, confirmed the exact row in the database
+(status "draft," correct customer ref, correct party, correct total), and
+confirmed the quotation shows up correctly in Sales History (Ctrl+H)
+right alongside invoices, since both share the same table.
+
+**Source:** Mehmoon, 2026-09-09.
+
+---
+
 ## 2026-09-09 — Built Sales History, opened with Ctrl+H
 
 **Decision:** Built the first way to see a sale again after checkout
