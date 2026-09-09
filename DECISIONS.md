@@ -5,6 +5,50 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-09 — Built Party management and wired it into checkout
+
+**Decision:** Built the first real CRUD for the Party Form (CLAUDE.md
+5.5) - `parties`/`party_phone_numbers` already existed in the schema
+since 2026-09-08 but nothing had ever used them. Added a `Parties` nav
+tab and wired a party picker into the POS checkout, which was walk-in-
+only until now.
+
+**Key design choice - the POS party picker filters to Nature "S3"
+(Customer Receivable A/C) only**, not Status. Reasoning: Status
+(C1/C2/C3) is a commercial/pricing tier, Nature (S1/S2/S3) is what
+determines which ledger account family a party posts against - a
+vendor/supplier (S1/S2) isn't someone you'd sell to, so filtering by
+Nature felt like the right axis. Flagged `[unclear — confirm]` in
+CLAUDE.md since this is an interpretation, not something the client
+explicitly confirmed. The Party *management* screen itself does NOT
+filter - it manages every party regardless of Nature, since vendors and
+suppliers need records too, just not in the checkout picker.
+
+**API** (`src/server/routes/parties.ts`): `GET /` (list, optional `q`
+name search and `nature` filter) and `POST /` (create party + its phone
+numbers in one transaction). `sales.ts`'s checkout now accepts an
+optional `partyId`, validated against the real `parties` table if
+provided, and stored on the created `sales_documents` row - still
+optional, so a walk-in sale (`partyId` omitted) works exactly as before.
+
+**Frontend:** `PartyView.tsx` - a list of existing parties plus a create
+form with human-readable Status/Nature labels (e.g. "S3 · Customer
+Receivable A/C") rather than showing the bare codes, since the codes
+alone aren't self-explanatory. `PosView.tsx` gained a party `<select>`
+in the cart panel, defaulting to "Walk-in customer".
+
+**Verified end to end**: created two parties (one Customer Receivable,
+one Vendor/Supplier) through the real UI form, confirmed the
+vendor/supplier one does NOT appear in the POS party picker (nature
+filter working), completed one checkout on Kiyani Autos with a real
+party attached and one on Kiyan Traders with a different real party,
+and confirmed both invoices show the correct party in the database
+afterward.
+
+**Source:** Mehmoon, 2026-09-09.
+
+---
+
 ## 2026-09-09 — Built the real Inventory screen (markers/items/control parts CRUD)
 
 **Decision:** Built full CRUD for the three-step inventory structure plus
