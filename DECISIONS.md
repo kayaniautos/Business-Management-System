@@ -5,6 +5,66 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-09 — Built real POS checkout: cart, entity-gated discounts, a real posted invoice
+
+**Decision:** Extended the POS screen from search-only to a full checkout,
+creating a real `sales_documents` row (type `invoice`) rather than just
+displaying data. This is the first thing in the project to actually use
+`document_number_counters` - that table existed since the first schema
+pass but nothing had ever assigned a real number before this.
+
+**Document numbering implementation** (`src/server/services/
+document-numbers.ts`): an atomic `INSERT ... ON CONFLICT (legal_entity_id,
+document_type) DO UPDATE SET last_number = last_number + 1 RETURNING`
+against the existing unique index - Postgres serializes concurrent
+writers on that row automatically, so no explicit row locking was needed
+for a single local Postgres instance. Formatted as
+`{ENTITY_CODE}-{TYPE_CODE}-{4-digit number}`, e.g. `KA-INV-0001`.
+**Not confirmed with the client** - no numbering scheme was ever
+provided (same open item already logged for chart-of-accounts codes).
+The entity short codes (KT/KA) are a hardcoded lookup in this service,
+not a schema column, since `legal_entities` has no short-code field and
+adding one for two entities that aren't going to change felt like
+premature schema surface.
+**Explicitly does NOT solve** the multi-terminal-offline collision risk
+already flagged on that table's schema comment - this project has one
+terminal so far, so that risk isn't exercised, but this function must not
+be assumed safe once a second terminal exists.
+
+**Checkout flow decisions:**
+- **Posted immediately, not draft.** A walk-in/counter sale is final at
+  the point of sale - the post/unpost pattern (CLAUDE.md 5.9) is aimed at
+  the corporate Quotation -> DN -> Invoice document-chain workflow, not
+  a one-step POS checkout. Revisit if that reading turns out wrong.
+- **No price catalog field used or added.** Staff type the gross price
+  per line in the cart, matching the confirmed "gross-price-entry
+  pattern" (CLAUDE.md 5.9) exactly - this isn't a gap, it's what the
+  client's own notes describe.
+- **Amounts always recomputed server-side** from quantity x
+  unitGrossPrice, never trusted from the client, even though this is an
+  internal-only app - cheap to do correctly from the start.
+- **Discount gating enforced server-side**: rejects with a clear 400 if
+  Kiyan Traders tries to send any discount, and the request schema caps
+  discounts at 2 directly. A discount total exceeding the sale's subtotal
+  is also rejected (400), rather than allowing a negative total.
+- **No party attached** - `partyId` stays null (walk-in only). No party-
+  picker UI exists yet.
+- **New `GET /api/entities`** so the frontend's entity selector shows
+  real data, not hardcoded KT/KA options - same "don't invent data"
+  principle as everywhere else in this project.
+
+**Verified by actually using it in the browser**: switched to Kiyani
+Autos, searched and added two real parts, entered gross prices, added an
+itemized discount (only offered because Kiyani Autos was selected), saw
+the total compute correctly (970 - 100 = 870), checked out, and got back
+a real assigned number (`KA-INV-0001`) - confirmed directly against the
+database afterward: correct subtotal/discount/total, correct line items,
+correct discount row.
+
+**Source:** Mehmoon, 2026-09-09.
+
+---
+
 ## 2026-09-09 — Restyled the vertical slice to match the approved UI concept
 
 **What happened:** Mehmoon saw the plain, unstyled login/search screens
