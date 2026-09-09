@@ -5,6 +5,37 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-09 — Restyled the vertical slice to match the approved UI concept
+
+**What happened:** Mehmoon saw the plain, unstyled login/search screens
+and (correctly) pointed out they didn't look like the approved design
+concept. That was intentional at the time (proving the real data path
+mattered more than visual polish for that first pass), but once asked,
+restyled both screens for real rather than just explaining it away.
+
+**What changed:** login and search screens now use the same design
+tokens as the approved concept (`https://claude.ai/code/artifact/
+ba934bdb-...`), including the accent-color and 44px touch-target fixes
+already made to that concept after its own accessibility review - real
+KT/KA logos, a numeric PIN pad, and the confirmed business contact
+footer. The staff picker is backed by a NEW real endpoint
+(`GET /api/auth/staff`) rather than hardcoded, since a picker showing
+fake names would repeat the exact mistake this whole vertical-slice
+effort was meant to move away from.
+
+**Verified in-browser**, clicking through for real: staff picker loads
+the real seeded user, the PIN pad correctly builds and submits a PIN
+digit by digit, login succeeds and lands on a matching-styled search
+screen, and search still returns real joined results afterward.
+
+**Not done:** the Inventory screen from the original 3-screen concept
+has no real-data equivalent yet - only Login and (a version of) POS
+counter search exist so far.
+
+**Source:** Mehmoon, 2026-09-09.
+
+---
+
 ## 2026-09-09 — Fastify over Express; built the first real running vertical slice
 
 **Context:** Mehmoon asked when the app would actually be usable/visible,
