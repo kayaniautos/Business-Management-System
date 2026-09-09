@@ -29,6 +29,13 @@
       "when": 1788907239347,
       "tag": "0003_classy_inertia",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788984818547,
+      "tag": "0004_white_wasp",
+      "breakpoints": true
     }
   ]
 }
