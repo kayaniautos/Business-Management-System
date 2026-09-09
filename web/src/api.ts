@@ -209,3 +209,39 @@ export const createParty = (party: {
   ntnNo?: string;
   phoneNumbers: string[];
 }) => postJson<Party>("/api/parties", party);
+
+export interface SalesDocumentSummary {
+  id: string;
+  documentType: string;
+  documentNumber: string;
+  entityName: string;
+  partyName: string | null;
+  documentDate: string;
+  subtotalAmount: string;
+  discountTotal: string;
+  totalAmount: string;
+  status: string;
+}
+
+export interface SalesDocumentDetail extends SalesDocumentSummary {
+  lines: {
+    lineNumber: number;
+    partNumber: string;
+    catalogName: string;
+    displayName: string | null;
+    quantity: number;
+    unitGrossPrice: string;
+    lineGrossAmount: string;
+  }[];
+  discounts: { label: string; amount: string }[];
+}
+
+export const getSalesHistory = (opts?: { legalEntityId?: string; q?: string }) => {
+  const params = new URLSearchParams();
+  if (opts?.legalEntityId) params.set("legalEntityId", opts.legalEntityId);
+  if (opts?.q) params.set("q", opts.q);
+  const qs = params.toString();
+  return getJson<SalesDocumentSummary[]>(`/api/sales${qs ? `?${qs}` : ""}`);
+};
+
+export const getSalesDocument = (id: string) => getJson<SalesDocumentDetail>(`/api/sales/${id}`);
