@@ -75,6 +75,94 @@ export interface CheckoutResult {
   totalAmount: string;
 }
 
+async function getJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? "Request failed");
+  return body as T;
+}
+
+async function postJson<T>(url: string, payload: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = res.status === 204 ? null : await res.json();
+  if (!res.ok) throw new Error((body as { error?: string } | null)?.error ?? "Request failed");
+  return body as T;
+}
+
+export interface Marker {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  description: string | null;
+  markerId: string | null;
+}
+
+export interface ControlPart {
+  id: string;
+  partNumber: string;
+  name: string;
+  description: string | null;
+  itemId: string | null;
+  parentControlPartId: string | null;
+  parentPartNumber: string | null;
+  fitment: { id: string; make: string; model: string }[];
+}
+
+export interface CarModel {
+  id: string;
+  make: string;
+  model: string;
+  yearFrom: number | null;
+  yearTo: number | null;
+}
+
+export const getMarkers = () => getJson<Marker[]>("/api/inventory/markers");
+export const createMarker = (name: string) =>
+  postJson<Marker>("/api/inventory/markers", { name });
+
+export const getItems = (markerId?: string) =>
+  getJson<InventoryItem[]>(`/api/inventory/items${markerId ? `?markerId=${markerId}` : ""}`);
+export const createItem = (name: string, markerId: string) =>
+  postJson<InventoryItem>("/api/inventory/items", { name, markerId });
+
+export const getControlParts = (itemId?: string) =>
+  getJson<ControlPart[]>(`/api/inventory/control-parts${itemId ? `?itemId=${itemId}` : ""}`);
+export const createControlPart = (
+  partNumber: string,
+  name: string,
+  itemId: string,
+  parentControlPartId?: string,
+) =>
+  postJson<ControlPart>("/api/inventory/control-parts", {
+    partNumber,
+    name,
+    itemId,
+    parentControlPartId,
+  });
+
+export const getCarModels = () => getJson<CarModel[]>("/api/inventory/car-models");
+export const createCarModel = (make: string, model: string) =>
+  postJson<CarModel>("/api/inventory/car-models", { make, model });
+
+export const attachFitment = (controlPartId: string, carModelId: string) =>
+  postJson<null>(`/api/inventory/control-parts/${controlPartId}/fitment`, { carModelId });
+
+export async function detachFitment(controlPartId: string, carModelId: string): Promise<void> {
+  const res = await fetch(`/api/inventory/control-parts/${controlPartId}/fitment/${carModelId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Could not remove fitment");
+}
+
 export async function checkout(
   legalEntityId: string,
   lines: CheckoutLine[],

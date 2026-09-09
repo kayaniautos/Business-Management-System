@@ -110,27 +110,15 @@ export function PosView({ user }: { user: LoginResult }) {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <div
-        style={{
-          height: 72,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 28px",
-          background: "oklch(99% 0.004 85 / .6)",
-          backdropFilter: "blur(24px)",
-          borderBottom: "1px solid var(--line)",
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <img src="/kt-logo.png" alt="Kiyan Traders" className="brand-logo" style={{ height: 36 }} />
-          {entities && (
+    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
+      <div style={{ flex: 1.6, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+        {entities && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span className="muted" style={{ fontSize: 12.5, fontWeight: 700 }}>Selling as:</span>
             <select
               value={entityId}
               onChange={(e) => setEntityId(e.target.value)}
-              style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontWeight: 700, fontSize: 13.5 }}
+              style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontWeight: 700, fontSize: 13.5, background: "white" }}
             >
               {entities.map((ent) => (
                 <option key={ent.id} value={ent.id}>
@@ -138,15 +126,8 @@ export function PosView({ user }: { user: LoginResult }) {
                 </option>
               ))}
             </select>
-          )}
-        </div>
-        <div style={{ fontWeight: 700, fontSize: 13.5 }}>
-          {user.fullName} <span className="muted">&middot; {user.roles.join(", ") || "No role"}</span>
-        </div>
-      </div>
-
-      <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-        <div style={{ flex: 1.6, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+          </div>
+        )}
           <form onSubmit={handleSearch} style={{ display: "flex", gap: 10 }}>
             <input
               value={q}
@@ -254,6 +235,5 @@ export function PosView({ user }: { user: LoginResult }) {
           )}
         </div>
       </div>
-    </div>
   );
 }
