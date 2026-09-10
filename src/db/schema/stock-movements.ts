@@ -3,6 +3,7 @@ import { idColumn, timestampColumns } from "./_helpers.js";
 import { users } from "./users.js";
 import { controlParts } from "./inventory.js";
 import { salesDocuments } from "./sales-documents.js";
+import { purchaseDocuments } from "./purchase-documents.js";
 
 /**
  * Stock quantity ledger — did not exist anywhere before this pass. Every
@@ -25,7 +26,12 @@ import { salesDocuments } from "./sales-documents.js";
  * (CLAUDE.md 5.10). A Deal Part line (CLAUDE.md 5.4) expands into one row
  * per underlying component part, quantity = line qty * component qty —
  * "a Deal Part sale posts stock movement against the underlying Items."
- * Purchasing isn't built yet, so no "purchase" type exists.
+ * `movementType` gained "purchase" 2026-09-11 (Mehmoon's direction:
+ * purchasing/goods receipt) — written by Goods Receipt post/unpost only
+ * (src/server/services/purchase-stock-movements.ts). A Purchase Order has
+ * no stock effect (nothing has arrived yet); a Purchase Invoice has none
+ * either, since the Goods Receipt it's raised from already moved stock —
+ * see purchase-documents.ts's header comment for the full reasoning.
  *
  * `[unclear — confirm]` Selling into negative stock is NOT blocked —
  * nothing in the client's notes confirms whether backorder/negative
@@ -35,6 +41,7 @@ import { salesDocuments } from "./sales-documents.js";
 export const stockMovementTypeEnum = pgEnum("stock_movement_type", [
   "adjustment",
   "sale",
+  "purchase",
 ]);
 
 export const stockMovements = pgTable("stock_movements", {
@@ -52,10 +59,12 @@ export const stockMovements = pgTable("stock_movements", {
   // no staff-written comment, it's traced back to its document instead.
   reasonComment: text("reason_comment"),
   // Traces a "sale" movement back to the Invoice/DN that caused it — null
-  // for "adjustment" rows, which have no document. Nullable, not a
-  // discriminator column, since which movement types carry a document
-  // reference vs. a comment may grow (e.g. a future "purchase" type).
+  // for "adjustment"/"purchase" rows.
   salesDocumentId: uuid("sales_document_id").references(() => salesDocuments.id),
+  // Traces a "purchase" movement back to the Goods Receipt that caused it
+  // — null for every other movement type. Separate nullable column rather
+  // than reusing salesDocumentId, since the two reference different tables.
+  purchaseDocumentId: uuid("purchase_document_id").references(() => purchaseDocuments.id),
   ...timestampColumns,
   createdBy: uuid("created_by").references(() => users.id),
   updatedBy: uuid("updated_by").references(() => users.id),

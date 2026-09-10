@@ -5,6 +5,7 @@ export * from "./car-models.js";
 export * from "./accounts.js";
 export * from "./parties.js";
 export * from "./sales-documents.js";
+export * from "./purchase-documents.js";
 export * from "./documents.js";
 export * from "./fbr.js";
 export * from "./stock-movements.js";
