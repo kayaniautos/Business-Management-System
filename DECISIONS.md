@@ -5,6 +5,60 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-10 — Replaced the range-label Model picker with a real Year dropdown
+
+**What triggered this:** immediately after shipping fitment search
+with a Make → Model cascade (each Model option labeled with its year
+range), Mehmoon pointed out there should be a real Year dropdown too.
+Fair correction - reading a range label and mentally checking "does
+2012 fall in 2009-2016" is still work for the staff member; picking
+"2012" directly from a list is not.
+
+**Decision:** three-level cascade, Make → Model → Year, where Year is
+generated from data already on each `car_models` row rather than a
+new field, and resolves client-side to the right row automatically.
+
+**Key design choices:**
+- **Backend untouched.** The `carModelId` search param built minutes
+  earlier already does exactly what's needed - narrow to parts fitted
+  to one specific row. Only the picker UI needed to change; re-using
+  the already-curl-and-browser-verified endpoint unchanged avoided
+  re-testing the part of the feature that was already correct.
+- **Year options are generated, not stored.** For each `car_models`
+  row matching the selected make+model, every individual year in its
+  `[yearFrom, yearTo]` range becomes one dropdown option, all mapped
+  back to that row's id. A model with two generations (e.g. Corolla
+  2009-2016 and 2017-2019) shows one continuous 2009-2019 list:
+  staff don't need to know a "generation" boundary exists at all,
+  they just pick their year and the row resolves underneath.
+- **Rows with no year set at all get one "Year not specified" option**
+  instead of becoming unreachable - existing fitment data predates
+  this feature and shouldn't be orphaned by it.
+- **The Year `<select>` is keyed on `${make}:${model}`** so it
+  visually resets when Make or Model changes, instead of silently
+  keeping a stale year selection from a previous model - a real bug
+  caught before it shipped (React doesn't reset an uncontrolled
+  select's displayed value on its own just because the underlying
+  option list changed).
+- **`carModelLabel()` stays in `api.ts`**, still used by Inventory's
+  own fitment-row picker (which genuinely does pick one specific row
+  at a time and still benefits from seeing its range) - only removed
+  from POS, which no longer needs it now that Model shows a plain name.
+
+**Verified end to end through the real UI**: picked Toyota → Corolla
+→ 2012 and confirmed the one part fitted to the 2009-2016 generation
+appeared; picked year 2018 instead (same Model) and confirmed zero
+results, correctly resolving to the *other*, unfitted generation
+rather than either generation arbitrarily; confirmed the Year dropdown
+visually clears when switching Make or Model rather than retaining a
+stale selection; confirmed a yearless model (Suzuki Mehran) offers
+"Year not specified" and still resolves to its real fitted part
+correctly.
+
+**Source:** Mehmoon, 2026-09-10.
+
+---
+
 ## 2026-09-10 — Built vehicle fitment search (model + year range)
 
 **What triggered this:** Mehmoon asked directly when part search by car
