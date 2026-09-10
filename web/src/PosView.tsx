@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
-  carModelLabel,
   checkout,
   getCarModels,
   getEntities,
@@ -41,12 +40,15 @@ export function PosView({ user }: { user: LoginResult }) {
   const [results, setResults] = useState<PartSearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   // Vehicle fitment search (handover doc §6.2: "by vehicle model + year
-  // range") — cascading Make -> Model, where each Model option is
-  // labeled with its own year range so picking it resolves "which
-  // generation" without a separate year field (Mehmoon's direction
-  // 2026-09-10).
+  // range") — cascading Make -> Model -> Year. Year is a real dropdown
+  // (Mehmoon's direction 2026-09-10: matches how a customer actually
+  // describes their car, e.g. "Corolla 2012"), generated from the
+  // yearFrom/yearTo already on each car_models row rather than a new
+  // field — picking a specific year resolves to whichever row's range
+  // contains it, so staff never need to read/interpret a range label.
   const [carModels, setCarModels] = useState<CarModel[]>([]);
   const [selectedMake, setSelectedMake] = useState("");
+  const [selectedModel, setSelectedModel] = useState("");
   const [selectedCarModelId, setSelectedCarModelId] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discounts, setDiscounts] = useState<CheckoutDiscount[]>([]);
@@ -69,7 +71,28 @@ export function PosView({ user }: { user: LoginResult }) {
   const canDiscount = selectedEntity?.name === KIYANI_AUTOS;
 
   const makes = [...new Set(carModels.map((c) => c.make))].sort();
-  const modelsForMake = carModels.filter((c) => c.make === selectedMake);
+  const modelNamesForMake = [...new Set(carModels.filter((c) => c.make === selectedMake).map((c) => c.model))].sort();
+  const rowsForSelectedModel = carModels.filter((c) => c.make === selectedMake && c.model === selectedModel);
+
+  // One option per individual year covered by any generation's range,
+  // plus one option per row that has no range set at all (existing data
+  // some fitment was tagged without a year — still needs to be pickable).
+  interface YearOption {
+    value: string;
+    label: string;
+    carModelId: string;
+  }
+  const yearOptions: YearOption[] = [];
+  for (const row of rowsForSelectedModel) {
+    if (row.yearFrom && row.yearTo) {
+      for (let y = row.yearFrom; y <= row.yearTo; y++) {
+        yearOptions.push({ value: String(y), label: String(y), carModelId: row.id });
+      }
+    } else if (!row.yearFrom && !row.yearTo) {
+      yearOptions.push({ value: `row:${row.id}`, label: "Year not specified", carModelId: row.id });
+    }
+  }
+  yearOptions.sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true }));
 
   async function runSearch(carModelId?: string) {
     setSearchError(null);
@@ -94,9 +117,18 @@ export function PosView({ user }: { user: LoginResult }) {
     await runSearch(selectedCarModelId || undefined);
   }
 
-  function handleSelectModel(carModelId: string) {
+  function handleSelectYear(value: string) {
+    const option = yearOptions.find((o) => o.value === value);
+    const carModelId = option?.carModelId ?? "";
     setSelectedCarModelId(carModelId);
     runSearch(carModelId || undefined);
+  }
+
+  function clearFitmentSearch() {
+    setSelectedMake("");
+    setSelectedModel("");
+    setSelectedCarModelId("");
+    runSearch(undefined);
   }
 
   function addToCart(part: PartSearchResult) {
@@ -201,13 +233,15 @@ export function PosView({ user }: { user: LoginResult }) {
           </form>
 
           {carModels.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span className="muted" style={{ fontSize: 12.5, fontWeight: 700 }}>Or find by vehicle:</span>
               <select
                 value={selectedMake}
                 onChange={(e) => {
                   setSelectedMake(e.target.value);
-                  handleSelectModel("");
+                  setSelectedModel("");
+                  setSelectedCarModelId("");
+                  runSearch(undefined);
                 }}
                 style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
               >
@@ -217,25 +251,33 @@ export function PosView({ user }: { user: LoginResult }) {
                 ))}
               </select>
               <select
-                value={selectedCarModelId}
-                onChange={(e) => handleSelectModel(e.target.value)}
+                value={selectedModel}
+                onChange={(e) => {
+                  setSelectedModel(e.target.value);
+                  setSelectedCarModelId("");
+                  runSearch(undefined);
+                }}
                 disabled={!selectedMake}
                 style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
               >
                 <option value="">Model...</option>
-                {modelsForMake.map((c) => (
-                  <option key={c.id} value={c.id}>{carModelLabel(c)}</option>
+                {modelNamesForMake.map((model) => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+              </select>
+              <select
+                key={`${selectedMake}:${selectedModel}`}
+                onChange={(e) => handleSelectYear(e.target.value)}
+                disabled={!selectedModel}
+                style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
+              >
+                <option value="">Year...</option>
+                {yearOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
               {selectedCarModelId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedMake("");
-                    handleSelectModel("");
-                  }}
-                  style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-300)", fontSize: 12.5 }}
-                >
+                <button type="button" onClick={clearFitmentSearch} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-300)", fontSize: 12.5 }}>
                   Clear
                 </button>
               )}
