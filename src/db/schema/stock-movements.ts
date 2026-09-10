@@ -2,6 +2,7 @@ import { integer, pgEnum, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { idColumn, timestampColumns } from "./_helpers.js";
 import { users } from "./users.js";
 import { controlParts } from "./inventory.js";
+import { salesDocuments } from "./sales-documents.js";
 
 /**
  * Stock quantity ledger — did not exist anywhere before this pass. Every
@@ -15,14 +16,25 @@ import { controlParts } from "./inventory.js";
  * "LIFO must be deliberate") are built — those will also want a per-
  * movement record, not a single running number.
  *
- * `movementType` only has "adjustment" today because that's the only
- * feature writing to this table so far. Sale/purchase/etc. movement types
- * will be added here once checkout/DN/purchasing actually decrement or
- * increment real stock — that integration is explicitly NOT part of this
- * pass (checkout, Quotation, and DN still do not touch this table).
+ * `movementType` added "sale" 2026-09-10 (Mehmoon's direction: wire real
+ * stock movements into sales) — written by checkout (Invoice, decremented
+ * immediately at creation, matching "posted at point of sale") and by DN
+ * post/unpost (decremented on post, reversed with a positive-delta "sale"
+ * row on unpost — see src/server/services/stock-movements.ts). Quotation
+ * never writes here, matching its "zero accounting impact" spec
+ * (CLAUDE.md 5.10). A Deal Part line (CLAUDE.md 5.4) expands into one row
+ * per underlying component part, quantity = line qty * component qty —
+ * "a Deal Part sale posts stock movement against the underlying Items."
+ * Purchasing isn't built yet, so no "purchase" type exists.
+ *
+ * `[unclear — confirm]` Selling into negative stock is NOT blocked —
+ * nothing in the client's notes confirms whether backorder/negative
+ * stock should be allowed or hard-blocked, so this doesn't invent a
+ * business rule either way; the ledger just records whatever happens.
  */
 export const stockMovementTypeEnum = pgEnum("stock_movement_type", [
   "adjustment",
+  "sale",
 ]);
 
 export const stockMovements = pgTable("stock_movements", {
@@ -35,13 +47,15 @@ export const stockMovements = pgTable("stock_movements", {
   // at the application layer, same pattern as the discount/phone-number
   // caps elsewhere in this codebase.
   quantityDelta: integer("quantity_delta").notNull(),
-  // Mandatory per the client's own notes ("mandatory, detailed comment" —
-  // Form F). NOT NULL here because "adjustment" is the only movement type
-  // that exists yet; if a future movement type (e.g. "sale") doesn't need
-  // a staff-written comment, this column should become nullable then and
-  // the requirement re-enforced at the application layer for adjustments
-  // specifically — not decided now, since that type doesn't exist yet.
-  reasonComment: text("reason_comment").notNull(),
+  // Mandatory only for "adjustment" (Form F's own confirmed requirement),
+  // enforced at the application layer, not here — a "sale" movement has
+  // no staff-written comment, it's traced back to its document instead.
+  reasonComment: text("reason_comment"),
+  // Traces a "sale" movement back to the Invoice/DN that caused it — null
+  // for "adjustment" rows, which have no document. Nullable, not a
+  // discriminator column, since which movement types carry a document
+  // reference vs. a comment may grow (e.g. a future "purchase" type).
+  salesDocumentId: uuid("sales_document_id").references(() => salesDocuments.id),
   ...timestampColumns,
   createdBy: uuid("created_by").references(() => users.id),
   updatedBy: uuid("updated_by").references(() => users.id),
