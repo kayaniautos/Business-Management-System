@@ -9,7 +9,8 @@ export type View =
   | "parties"
   | "sales-history"
   | "stock-adjustments"
-  | "deal-parts";
+  | "deal-parts"
+  | "admin-settings";
 
 const VIEW_LABELS: Record<View, string> = {
   pos: "POS Counter",
@@ -20,6 +21,7 @@ const VIEW_LABELS: Record<View, string> = {
   "sales-history": "Sales History (Ctrl+H)",
   "stock-adjustments": "Stock Adjustment",
   "deal-parts": "Deal Parts",
+  "admin-settings": "Admin Settings",
 };
 
 /**
@@ -162,6 +164,9 @@ export function AppHeader({
 
           <button type="button" onClick={() => selectView("parties")} style={tabStyle(view === "parties")}>
             {VIEW_LABELS.parties}
+          </button>
+          <button type="button" onClick={() => selectView("admin-settings")} style={tabStyle(view === "admin-settings")}>
+            {VIEW_LABELS["admin-settings"]}
           </button>
         </nav>
       </div>

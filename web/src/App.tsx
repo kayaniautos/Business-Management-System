@@ -8,6 +8,7 @@ import { StockAdjustmentView } from "./StockAdjustmentView.js";
 import { DealPartView } from "./DealPartView.js";
 import { PartyView } from "./PartyView.js";
 import { SalesHistoryView } from "./SalesHistoryView.js";
+import { AdminSettingsView } from "./AdminSettingsView.js";
 import { AppHeader, type View } from "./AppHeader.js";
 import type { LoginResult } from "./api.js";
 
@@ -46,6 +47,7 @@ export function App() {
       {view === "deal-parts" && <DealPartView />}
       {view === "parties" && <PartyView />}
       {view === "sales-history" && <SalesHistoryView />}
+      {view === "admin-settings" && <AdminSettingsView />}
     </div>
   );
 }

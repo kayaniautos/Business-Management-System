@@ -96,6 +96,17 @@ async function postJson<T>(url: string, payload: unknown): Promise<T> {
   return body as T;
 }
 
+async function putJson<T>(url: string, payload: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = res.status === 204 ? null : await res.json();
+  if (!res.ok) throw new Error((body as { error?: string } | null)?.error ?? "Request failed");
+  return body as T;
+}
+
 export interface Marker {
   id: string;
   name: string;
@@ -338,3 +349,41 @@ export const createDealPart = (input: {
   description?: string;
   components: { controlPartId: string; quantity: number }[];
 }) => postJson<DealPart>("/api/deal-parts", input);
+
+export interface Role {
+  id: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+}
+
+export const getRoles = () => getJson<Role[]>("/api/admin/roles");
+export const createRole = (input: { name: string; description?: string }) =>
+  postJson<Role>("/api/admin/roles", input);
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  fullName: string;
+  phone: string | null;
+  isActive: boolean;
+  roles: { id: string; name: string }[];
+}
+
+export const getAdminUsers = () => getJson<AdminUser[]>("/api/admin/users");
+
+export const createAdminUser = (input: {
+  username: string;
+  fullName: string;
+  phone?: string;
+  pin: string;
+  roleIds: string[];
+}) => postJson<AdminUser>("/api/admin/users", input);
+
+export const setUserRoles = (userId: string, roleIds: string[]) =>
+  putJson<AdminUser>(`/api/admin/users/${userId}/roles`, { roleIds });
+
+export const deactivateUser = (userId: string) =>
+  postJson<AdminUser>(`/api/admin/users/${userId}/deactivate`, {});
+export const activateUser = (userId: string) =>
+  postJson<AdminUser>(`/api/admin/users/${userId}/activate`, {});
