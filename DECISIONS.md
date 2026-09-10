@@ -37,8 +37,10 @@ time.
   schema, seeded with a sensible default per role but editable later,
   matching Ghaus's own "I can choose or edit at any time" answer on
   permissions) was discussed as the deliberate next layer, explicitly
-  **not** built now - Mehmoon asked for the nav restructure first, this
-  layered on after, one change at a time.
+  **not** built now. **Follow-up, Mehmoon 2026-09-10:** this specifically
+  waits for an Admin Settings / Roles module - a real screen for
+  managing `roles`/`permissions` - rather than being bolted onto the
+  nav ahead of that screen existing. Sequencing, not a scope change.
 
 **Verified end to end through the real UI**: confirmed the nav renders
 as POS Counter / Sales ▾ / Inventory ▾ / Parties; opened each dropdown
