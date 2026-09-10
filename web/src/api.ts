@@ -52,9 +52,14 @@ export async function adminLogin(identifier: string, password: string): Promise<
   return body as LoginResult;
 }
 
-export async function searchParts(q: string, includeDealParts?: boolean): Promise<PartSearchResult[]> {
-  const params = new URLSearchParams({ q });
-  if (includeDealParts) params.set("includeDealParts", "true");
+export async function searchParts(
+  q: string,
+  opts?: { includeDealParts?: boolean; carModelId?: string },
+): Promise<PartSearchResult[]> {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (opts?.includeDealParts) params.set("includeDealParts", "true");
+  if (opts?.carModelId) params.set("carModelId", opts.carModelId);
   const res = await fetch(`/api/parts/search?${params.toString()}`);
   if (!res.ok) throw new Error("Search failed");
   return (await res.json()) as PartSearchResult[];
@@ -155,6 +160,19 @@ export interface CarModel {
   yearTo: number | null;
 }
 
+// Shared label formatter — used by both the Inventory fitment picker and
+// POS's Make/Model fitment search, so a model generation reads the same
+// way ("Corolla (2009-2016)") everywhere it's picked from a list. The
+// year range is the disambiguator between generations of the same model
+// (handover doc §6.2's "by vehicle model + year range"), so it's baked
+// into the label itself rather than a separate year field the staff has
+// to reconcile against.
+export function carModelLabel(c: CarModel): string {
+  if (c.yearFrom && c.yearTo) return `${c.model} (${c.yearFrom}-${c.yearTo})`;
+  if (c.yearFrom) return `${c.model} (${c.yearFrom}+)`;
+  return c.model;
+}
+
 export const getMarkers = () => getJson<Marker[]>("/api/inventory/markers");
 export const createMarker = (name: string) =>
   postJson<Marker>("/api/inventory/markers", { name });
@@ -180,8 +198,8 @@ export const createControlPart = (
   });
 
 export const getCarModels = () => getJson<CarModel[]>("/api/inventory/car-models");
-export const createCarModel = (make: string, model: string) =>
-  postJson<CarModel>("/api/inventory/car-models", { make, model });
+export const createCarModel = (make: string, model: string, yearFrom?: number, yearTo?: number) =>
+  postJson<CarModel>("/api/inventory/car-models", { make, model, yearFrom, yearTo });
 
 export const attachFitment = (controlPartId: string, carModelId: string) =>
   postJson<null>(`/api/inventory/control-parts/${controlPartId}/fitment`, { carModelId });

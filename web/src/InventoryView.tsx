@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   attachFitment,
+  carModelLabel,
   createCarModel,
   createControlPart,
   createItem,
@@ -35,6 +36,8 @@ export function InventoryView() {
   const [fitmentCarModelId, setFitmentCarModelId] = useState("");
   const [newCarMake, setNewCarMake] = useState("");
   const [newCarModelName, setNewCarModelName] = useState("");
+  const [newCarYearFrom, setNewCarYearFrom] = useState("");
+  const [newCarYearTo, setNewCarYearTo] = useState("");
 
   const [error, setError] = useState<string | null>(null);
 
@@ -104,7 +107,12 @@ export function InventoryView() {
     try {
       let carModelId = fitmentCarModelId;
       if (!carModelId && newCarMake.trim() && newCarModelName.trim()) {
-        const created = await createCarModel(newCarMake.trim(), newCarModelName.trim());
+        const created = await createCarModel(
+          newCarMake.trim(),
+          newCarModelName.trim(),
+          newCarYearFrom ? Number(newCarYearFrom) : undefined,
+          newCarYearTo ? Number(newCarYearTo) : undefined,
+        );
         setCarModels((prev) => [...prev, created]);
         carModelId = created.id;
       }
@@ -113,6 +121,8 @@ export function InventoryView() {
       setFitmentCarModelId("");
       setNewCarMake("");
       setNewCarModelName("");
+      setNewCarYearFrom("");
+      setNewCarYearTo("");
       setFitmentTarget(null);
       await refreshControlParts();
     } catch (e) {
@@ -211,12 +221,14 @@ export function InventoryView() {
                     <select value={fitmentCarModelId} onChange={(e) => setFitmentCarModelId(e.target.value)} style={{ padding: 6, fontSize: 12 }}>
                       <option value="">Existing car model...</option>
                       {carModels.map((c) => (
-                        <option key={c.id} value={c.id}>{c.make} {c.model}</option>
+                        <option key={c.id} value={c.id}>{c.make} {carModelLabel(c)}</option>
                       ))}
                     </select>
                     <span className="muted" style={{ fontSize: 11 }}>or new:</span>
                     <input placeholder="Make" value={newCarMake} onChange={(e) => setNewCarMake(e.target.value)} style={{ width: 80, padding: 6, fontSize: 12 }} />
                     <input placeholder="Model" value={newCarModelName} onChange={(e) => setNewCarModelName(e.target.value)} style={{ width: 80, padding: 6, fontSize: 12 }} />
+                    <input placeholder="Year from" type="number" value={newCarYearFrom} onChange={(e) => setNewCarYearFrom(e.target.value)} style={{ width: 80, padding: 6, fontSize: 12 }} />
+                    <input placeholder="Year to" type="number" value={newCarYearTo} onChange={(e) => setNewCarYearTo(e.target.value)} style={{ width: 80, padding: 6, fontSize: 12 }} />
                     <button type="button" onClick={() => handleAddFitment(cp.id)} style={{ padding: "4px 10px", cursor: "pointer" }}>Add</button>
                   </div>
                 )}
