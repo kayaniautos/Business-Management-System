@@ -16,6 +16,10 @@ const adminUserResponseSchema = z.object({
   fullName: z.string(),
   phone: z.string().nullable(),
   isActive: z.boolean(),
+  // Email or phone number, used as the admin login identifier — see
+  // src/db/schema/users.ts's comment on why this isn't email-only.
+  adminIdentifier: z.string().nullable(),
+  isAdmin: z.boolean(),
   roles: z.array(roleRefSchema),
 });
 
@@ -28,18 +32,32 @@ async function rolesForUser(userId: string) {
   return rows;
 }
 
+async function toAdminUser(user: typeof users.$inferSelect) {
+  return {
+    id: user.id,
+    username: user.username,
+    fullName: user.fullName,
+    phone: user.phone,
+    isActive: user.isActive,
+    adminIdentifier: user.adminIdentifier,
+    isAdmin: user.isAdmin,
+    roles: await rolesForUser(user.id),
+  };
+}
+
 /**
  * Staff account management for Admin Settings. Distinct from the
  * `/api/auth/staff` endpoint (auth.ts), which is the public "who's
  * working the counter" picker on the login screen and only ever returns
- * active users — this one is the admin's full view (active and
- * inactive) and is the first place any user can be created outside a
- * seed script.
+ * active users with a PIN set — this one is the admin's full view
+ * (active and inactive, admin or not) and is the first place any user
+ * can be created outside a seed script.
  *
  * Same as everywhere else in this app so far: no session/auth-token
  * enforcement exists yet (app.ts's own comment), so this isn't gated to
  * an "admin" role today — that's a known, pre-existing limitation, not
- * something new introduced here.
+ * something new introduced here. The frontend hides the Admin Settings
+ * tab unless `isAdmin` is true, but that's UI-only.
  */
 export const adminUsersRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -49,16 +67,7 @@ export const adminUsersRoutes: FastifyPluginAsync = async (fastify) => {
     { schema: { response: { 200: z.array(adminUserResponseSchema) } } },
     async () => {
       const allUsers = await db.query.users.findMany({ orderBy: (u, { asc }) => asc(u.fullName) });
-      return Promise.all(
-        allUsers.map(async (u) => ({
-          id: u.id,
-          username: u.username,
-          fullName: u.fullName,
-          phone: u.phone,
-          isActive: u.isActive,
-          roles: await rolesForUser(u.id),
-        })),
-      );
+      return Promise.all(allUsers.map(toAdminUser));
     },
   );
 
@@ -102,14 +111,7 @@ export const adminUsersRoutes: FastifyPluginAsync = async (fastify) => {
         return user;
       });
 
-      return {
-        id: created.id,
-        username: created.username,
-        fullName: created.fullName,
-        phone: created.phone,
-        isActive: created.isActive,
-        roles: await rolesForUser(created.id),
-      };
+      return toAdminUser(created);
     },
   );
 
@@ -143,14 +145,7 @@ export const adminUsersRoutes: FastifyPluginAsync = async (fastify) => {
         }
       });
 
-      return {
-        id: user.id,
-        username: user.username,
-        fullName: user.fullName,
-        phone: user.phone,
-        isActive: user.isActive,
-        roles: await rolesForUser(user.id),
-      };
+      return toAdminUser(user);
     },
   );
 
@@ -167,14 +162,7 @@ export const adminUsersRoutes: FastifyPluginAsync = async (fastify) => {
       const user = await db.query.users.findFirst({ where: eq(users.id, id) });
       if (!user) return reply.code(404).send({ error: "User not found" });
       await db.update(users).set({ isActive: false }).where(eq(users.id, id));
-      return {
-        id: user.id,
-        username: user.username,
-        fullName: user.fullName,
-        phone: user.phone,
-        isActive: false,
-        roles: await rolesForUser(user.id),
-      };
+      return toAdminUser({ ...user, isActive: false });
     },
   );
 
@@ -191,14 +179,69 @@ export const adminUsersRoutes: FastifyPluginAsync = async (fastify) => {
       const user = await db.query.users.findFirst({ where: eq(users.id, id) });
       if (!user) return reply.code(404).send({ error: "User not found" });
       await db.update(users).set({ isActive: true }).where(eq(users.id, id));
-      return {
-        id: user.id,
-        username: user.username,
-        fullName: user.fullName,
-        phone: user.phone,
-        isActive: true,
-        roles: await rolesForUser(user.id),
-      };
+      return toAdminUser({ ...user, isActive: true });
+    },
+  );
+
+  /**
+   * Grants admin access to an EXISTING user — a separate credential
+   * (identifier + password, hashed into `adminPasswordHash`) from their
+   * PIN, so promoting a staff member to admin doesn't touch their
+   * counter login at all. Mehmoon's direction 2026-09-10: Ghaus is admin
+   * and can make other users admin too, via a login distinct from the
+   * PIN pad — `identifier` accepts either an email or a phone number,
+   * since blue-collar staff being promoted often have no email.
+   */
+  app.post(
+    "/:id/grant-admin",
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        body: z.object({
+          identifier: z.string().trim().min(1),
+          password: z.string().min(6, "Password must be at least 6 characters"),
+        }),
+        response: { 200: adminUserResponseSchema, 400: errorResponseSchema, 404: errorResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { identifier, password } = request.body;
+
+      const user = await db.query.users.findFirst({ where: eq(users.id, id) });
+      if (!user) return reply.code(404).send({ error: "User not found" });
+
+      const existing = await db.query.users.findFirst({ where: eq(users.adminIdentifier, identifier) });
+      if (existing && existing.id !== id) {
+        return reply.code(400).send({ error: "A user with this email or phone already exists" });
+      }
+
+      const adminPasswordHash = await bcrypt.hash(password, 10);
+      await db
+        .update(users)
+        .set({ adminIdentifier: identifier, adminPasswordHash, isAdmin: true })
+        .where(eq(users.id, id));
+
+      return toAdminUser({ ...user, adminIdentifier: identifier, adminPasswordHash, isAdmin: true });
+    },
+  );
+
+  // Leaves adminIdentifier/adminPasswordHash in place so re-granting
+  // doesn't require re-entering credentials — only the isAdmin flag flips.
+  app.post(
+    "/:id/revoke-admin",
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        response: { 200: adminUserResponseSchema, 404: errorResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const user = await db.query.users.findFirst({ where: eq(users.id, id) });
+      if (!user) return reply.code(404).send({ error: "User not found" });
+      await db.update(users).set({ isAdmin: false }).where(eq(users.id, id));
+      return toAdminUser({ ...user, isAdmin: false });
     },
   );
 };
