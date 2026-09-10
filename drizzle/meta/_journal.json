@@ -36,6 +36,13 @@
       "when": 1788984818547,
       "tag": "0004_white_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789032014068,
+      "tag": "0005_groovy_lilith",
+      "breakpoints": true
     }
   ]
 }

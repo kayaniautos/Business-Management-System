@@ -15,6 +15,7 @@ import { users } from "./users.js";
 import { legalEntities } from "./entities.js";
 import { parties } from "./parties.js";
 import { controlParts } from "./inventory.js";
+import { dealParts } from "./deal-parts.js";
 
 /**
  * Sales document chain per CLAUDE.md 5.9/5.10:
@@ -157,11 +158,13 @@ export const salesDocumentLinks = pgTable(
 );
 
 /**
- * Line items. `controlPartId` is required for now because Deal Part
- * (CLAUDE.md 5.4, bundling) and the "generic catch-all item" for
- * uncatalogued parts (handover doc 6.2) don't exist yet — both are
- * extension points that will need this column to become nullable
- * alongside a new reference once built, not something to guess at now.
+ * Line items. `controlPartId` and `dealPartId` are both nullable —
+ * exactly one is set per line, enforced at the application layer (same
+ * pattern as the discount/phone-number caps elsewhere in this codebase),
+ * not a database CHECK constraint. `dealPartId` was added 2026-09-10 when
+ * Deal Part (CLAUDE.md 5.4, bundling) was built; the "generic catch-all
+ * item" for uncatalogued parts (handover doc 6.2) still doesn't exist and
+ * would need a third nullable reference here if built later.
  */
 export const salesDocumentLines = pgTable("sales_document_lines", {
   ...idColumn,
@@ -172,12 +175,11 @@ export const salesDocumentLines = pgTable("sales_document_lines", {
   // control over line sequencing/serial numbering") — not an implicit
   // insertion-order column.
   lineNumber: integer("line_number").notNull(),
-  controlPartId: uuid("control_part_id")
-    .notNull()
-    .references(() => controlParts.id),
+  controlPartId: uuid("control_part_id").references(() => controlParts.id),
+  dealPartId: uuid("deal_part_id").references(() => dealParts.id),
   // Per-invoice Print Name override (CLAUDE.md 5.9/5.10): falls back to
-  // controlParts.name when null, resolved at display/print time —
-  // renaming here never touches the catalog record.
+  // controlParts.name / dealParts.printName when null, resolved at
+  // display/print time — renaming here never touches the catalog record.
   displayName: varchar("display_name", { length: 200 }),
   quantity: integer("quantity").notNull(),
   unitGrossPrice: numeric("unit_gross_price", {

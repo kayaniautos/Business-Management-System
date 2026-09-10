@@ -8,3 +8,4 @@ export * from "./sales-documents.js";
 export * from "./documents.js";
 export * from "./fbr.js";
 export * from "./stock-movements.js";
+export * from "./deal-parts.js";
