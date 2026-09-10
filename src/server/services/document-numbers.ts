@@ -38,6 +38,9 @@ const DOCUMENT_TYPE_CODES: Record<string, string> = {
   quotation: "QTN",
   delivery_note: "DN",
   invoice: "INV",
+  purchase_order: "PO",
+  goods_receipt: "GRN",
+  purchase_invoice: "PINV",
 };
 
 export async function assignDocumentNumber(

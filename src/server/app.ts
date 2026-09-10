@@ -16,6 +16,10 @@ import { stockAdjustmentsRoutes } from "./routes/stock-adjustments.js";
 import { dealPartsRoutes } from "./routes/deal-parts.js";
 import { rolesRoutes } from "./routes/roles.js";
 import { adminUsersRoutes } from "./routes/admin-users.js";
+import { purchaseOrdersRoutes } from "./routes/purchase-orders.js";
+import { goodsReceiptsRoutes } from "./routes/goods-receipts.js";
+import { purchaseInvoicesRoutes } from "./routes/purchase-invoices.js";
+import { purchasesRoutes } from "./routes/purchases.js";
 
 /**
  * First-pass Fastify backend for the vertical slice: real login against the
@@ -49,6 +53,10 @@ export function buildApp() {
   app.register(dealPartsRoutes, { prefix: "/api/deal-parts" });
   app.register(rolesRoutes, { prefix: "/api/admin/roles" });
   app.register(adminUsersRoutes, { prefix: "/api/admin/users" });
+  app.register(purchaseOrdersRoutes, { prefix: "/api/purchase-orders" });
+  app.register(goodsReceiptsRoutes, { prefix: "/api/goods-receipts" });
+  app.register(purchaseInvoicesRoutes, { prefix: "/api/purchase-invoices" });
+  app.register(purchasesRoutes, { prefix: "/api/purchases" });
 
   app.get("/api/health", async () => ({ ok: true }));
 
