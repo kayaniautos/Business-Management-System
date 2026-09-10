@@ -5,6 +5,67 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-10 — Built the Admin Settings / Roles module
+
+**Decision:** Built directly following Mehmoon's own sequencing from the
+nav restructure entry below - role-based nav visibility waits for a real
+roles-management screen to exist first. This is that screen: the first
+UI against the RBAC scaffold that's existed in the schema since the
+start of the project without ever having one.
+
+**Key design choices:**
+- **Roles and users only - no permissions-grant UI.** CLAUDE.md 5.8 is
+  explicit that the `permissions`/`role_permissions` catalog (what a
+  role can actually do - discount approval, cost visibility, etc.) stays
+  untouched until the client's Authority Levels scoping conversation
+  happens. That catalog is still intentionally unseeded. Building a
+  grant UI now would mean inventing permission keys and their meaning
+  with no client input at all - the one thing CLAUDE.md was most
+  explicit about not doing here.
+- **User creation is real, not a seed-script-only concept.** Before this,
+  `users` rows only ever came from `src/db/seed.ts` /
+  `src/db/seed-dev-data.ts`. This is the first place a staff account with
+  a real PIN can be created through the app itself.
+- **Role assignment is a full replace, not incremental add/remove.**
+  `PUT /:id/roles` takes the complete desired role-id set and swaps it in
+  one transaction (delete then insert) - matches how the UI presents it
+  (a set of toggleable chips reflecting current state), and avoids any
+  drift between "what the chips show" and "what's actually stored."
+- **New custom roles are never `isSystem`.** That flag stays reserved for
+  the five roles seeded at setup - an admin-created role is always
+  editable/deletable later (deletion itself wasn't built this pass,
+  since nothing asked for it yet and CLAUDE.md doesn't mention role
+  deletion as a requirement).
+- **PIN format (4-6 digits) is inferred, not client-confirmed** - taken
+  from the existing PIN pad's own `MAX_PIN_LENGTH` (6) and the demo PIN's
+  length (4), flagged `[unclear — confirm]` rather than treated as a
+  real business rule.
+- **Not gated to an "admin" role.** Same as every other screen in this
+  app so far - there's no session/permission enforcement built yet
+  (`src/server/app.ts`'s own comment). Any logged-in user can currently
+  open this screen. Pre-existing limitation, not something new
+  introduced by this feature.
+
+**Verified end to end through the real UI** (plus curl for the
+login-blocking check): created a custom role ("Shift Supervisor")
+through the new form; created a new staff account (Bilal Shah, PIN 4321)
+with no roles selected and confirmed via the database it had an empty
+role set; toggled the new role onto him through the chip UI and
+confirmed via the database his role set updated correctly; deactivated
+him through the UI and confirmed via `POST /api/auth/login` that
+"Invalid username or PIN" is now returned for his credentials;
+separately (a test-scripting mistake, not an app bug - a DOM query
+matched a broader container than intended) accidentally toggled the new
+role onto the existing demo user instead of the new one, caught it via
+the database check, and confirmed toggling it off again correctly
+reverted his role set both times - incidentally a second real
+confirmation that the toggle mechanism itself works correctly in both
+directions.
+
+**Source:** Mehmoon, 2026-09-10.
+
+---
+
 ## 2026-09-10 — Restructured the nav into modules; deferred role-based visibility
 
 **Decision:** Mehmoon flagged that the nav bar (8 flat buttons after Deal
