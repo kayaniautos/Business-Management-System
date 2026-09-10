@@ -5,6 +5,53 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-10 — Restructured the nav into modules; deferred role-based visibility
+
+**Decision:** Mehmoon flagged that the nav bar (8 flat buttons after Deal
+Part shipped) had gotten unwieldy for counter staff who need POS
+reachable fast. Discussed two shapes before building: a flat "primary +
+2 dropdowns" split, and a proper module structure (POS standalone, then
+Sales/Inventory/eventually Purchasing/Accounting/Reports as named
+modules) mirroring how the confirmed five roles roughly map to areas of
+the app. Went with the module structure - it scales cleanly as later
+phases add whole new areas, rather than needing another nav rework each
+time.
+
+**Key design choices:**
+- **POS and Parties stay standalone, always-visible tabs** - not
+  grouped into a module - since POS specifically is the "fast counter
+  operation" screen (CLAUDE.md 1) and Parties is used from both Sales
+  and future Purchasing.
+- **Sales module**: Quotations, Delivery Notes, Sales History.
+  **Inventory module**: Inventory, Stock Adjustment, Deal Parts. Chosen
+  along "what does this role mostly touch" (CLAUDE.md 5.8/6's five
+  confirmed roles) rather than build-order, so it maps sensibly once
+  role-based visibility exists.
+- **No placeholder Accounting/Reports modules added yet.** Neither has
+  schema, and the client's own answer on Reports ("bear with me for
+  reports") means the list isn't even confirmed - an empty module tab
+  would be a dead link, not a real feature.
+- **Grouping is visual only.** Every view stays reachable by every
+  logged-in user in this pass - nothing was gated. Role-based tab
+  visibility (driven by the existing but unused `roles`/`permissions`
+  schema, seeded with a sensible default per role but editable later,
+  matching Ghaus's own "I can choose or edit at any time" answer on
+  permissions) was discussed as the deliberate next layer, explicitly
+  **not** built now - Mehmoon asked for the nav restructure first, this
+  layered on after, one change at a time.
+
+**Verified end to end through the real UI**: confirmed the nav renders
+as POS Counter / Sales ▾ / Inventory ▾ / Parties; opened each dropdown
+and confirmed its three members render, closing on selecting one and
+navigating correctly; confirmed a module button stays highlighted while
+its dropdown is closed if the current screen belongs to it (e.g. Sales
+stays highlighted while viewing Sales History); confirmed clicking
+outside the nav closes an open dropdown without navigating.
+
+**Source:** Mehmoon, 2026-09-10.
+
+---
+
 ## 2026-09-10 — Built real Deal Part (Form C)
 
 **Decision:** Built Deal Part over the other two candidates on the table
