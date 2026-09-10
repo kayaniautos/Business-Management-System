@@ -8,11 +8,13 @@ export interface LoginResult {
 
 export interface PartSearchResult {
   id: string;
-  partNumber: string;
+  // Null when isDealPart is true — bundles have no part number.
+  partNumber: string | null;
   name: string;
   itemName: string | null;
   markerName: string | null;
   fitment: { make: string; model: string }[];
+  isDealPart: boolean;
 }
 
 export interface StaffMember {
@@ -50,8 +52,10 @@ export async function adminLogin(identifier: string, password: string): Promise<
   return body as LoginResult;
 }
 
-export async function searchParts(q: string): Promise<PartSearchResult[]> {
-  const res = await fetch(`/api/parts/search?q=${encodeURIComponent(q)}`);
+export async function searchParts(q: string, includeDealParts?: boolean): Promise<PartSearchResult[]> {
+  const params = new URLSearchParams({ q });
+  if (includeDealParts) params.set("includeDealParts", "true");
+  const res = await fetch(`/api/parts/search?${params.toString()}`);
   if (!res.ok) throw new Error("Search failed");
   return (await res.json()) as PartSearchResult[];
 }

@@ -51,7 +51,7 @@ export function DealPartView() {
   function addComponent(part: PartSearchResult) {
     setComponents((prev) => {
       if (prev.some((c) => c.controlPartId === part.id)) return prev;
-      return [...prev, { controlPartId: part.id, partNumber: part.partNumber, name: part.name, quantity: 1 }];
+      return [...prev, { controlPartId: part.id, partNumber: part.partNumber ?? "", name: part.name, quantity: 1 }];
     });
   }
 

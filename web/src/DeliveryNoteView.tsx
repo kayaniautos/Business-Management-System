@@ -111,7 +111,7 @@ export function DeliveryNoteView() {
     setNewLines((prev) => {
       const existing = prev.find((l) => l.controlPartId === part.id);
       if (existing) return prev.map((l) => (l.controlPartId === part.id ? { ...l, quantity: l.quantity + 1 } : l));
-      return [...prev, { controlPartId: part.id, partNumber: part.partNumber, name: part.name, quantity: 1, unitGrossPrice: 0 }];
+      return [...prev, { controlPartId: part.id, partNumber: part.partNumber ?? "", name: part.name, quantity: 1, unitGrossPrice: 0 }];
     });
   }
 

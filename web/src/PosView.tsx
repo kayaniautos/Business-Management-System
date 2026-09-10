@@ -1,13 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   checkout,
-  getDealParts,
   getEntities,
   getParties,
   searchParts,
   type CheckoutDiscount,
   type CheckoutResult,
-  type DealPart,
   type LegalEntity,
   type LoginResult,
   type Party,
@@ -39,8 +37,6 @@ export function PosView({ user }: { user: LoginResult }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PartSearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [dealParts, setDealParts] = useState<DealPart[]>([]);
-  const [selectedDealPartId, setSelectedDealPartId] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discounts, setDiscounts] = useState<CheckoutDiscount[]>([]);
   const [discountLabel, setDiscountLabel] = useState("");
@@ -55,7 +51,6 @@ export function PosView({ user }: { user: LoginResult }) {
       if (list.length > 0) setEntityId(list[0].id);
     });
     getParties({ nature: "S3" }).then(setCustomers).catch(() => {});
-    getDealParts().then(setDealParts).catch(() => {});
   }, []);
 
   const selectedEntity = entities?.find((e) => e.id === entityId);
@@ -65,13 +60,26 @@ export function PosView({ user }: { user: LoginResult }) {
     e.preventDefault();
     setSearchError(null);
     try {
-      setResults(await searchParts(q));
+      // Deal Parts (CLAUDE.md 5.4) merged into the same results — POS is
+      // the only screen that can sell one, so it's the only search call
+      // that opts in (Mehmoon's direction 2026-09-10: a bundle should show
+      // up "same like other items," not in a separate picker).
+      setResults(await searchParts(q, true));
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "Search failed");
     }
   }
 
   function addToCart(part: PartSearchResult) {
+    if (part.isDealPart) {
+      const key = `deal:${part.id}`;
+      setCart((prev) => {
+        const existing = prev.find((l) => l.key === key);
+        if (existing) return prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity + 1 } : l));
+        return [...prev, { key, dealPartId: part.id, name: part.name, quantity: 1, unitGrossPrice: 0 }];
+      });
+      return;
+    }
     const key = `part:${part.id}`;
     setCart((prev) => {
       const existing = prev.find((l) => l.key === key);
@@ -80,19 +88,8 @@ export function PosView({ user }: { user: LoginResult }) {
       }
       return [
         ...prev,
-        { key, controlPartId: part.id, partNumber: part.partNumber, name: part.name, quantity: 1, unitGrossPrice: 0 },
+        { key, controlPartId: part.id, partNumber: part.partNumber ?? undefined, name: part.name, quantity: 1, unitGrossPrice: 0 },
       ];
-    });
-  }
-
-  function addDealToCart(deal: DealPart) {
-    const key = `deal:${deal.id}`;
-    setCart((prev) => {
-      const existing = prev.find((l) => l.key === key);
-      if (existing) {
-        return prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity + 1 } : l));
-      }
-      return [...prev, { key, dealPartId: deal.id, name: deal.printName, quantity: 1, unitGrossPrice: 0 }];
     });
   }
 
@@ -176,44 +173,42 @@ export function PosView({ user }: { user: LoginResult }) {
           {searchError && <div className="error-text">{searchError}</div>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
             {results.map((part) => (
-              <div key={part.id} className="glass-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ fontWeight: 700, fontSize: 14.5 }}>{part.name}</div>
-                <div className="muted" style={{ fontSize: 12 }}>{part.partNumber}</div>
+              <div
+                key={part.id}
+                className="glass-card"
+                style={{
+                  padding: 16,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  borderLeft: part.isDealPart ? "4px solid var(--accent)" : undefined,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14.5 }}>{part.name}</div>
+                  {part.isDealPart && (
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontWeight: 800,
+                        letterSpacing: 0.3,
+                        color: "white",
+                        background: "var(--accent)",
+                        borderRadius: 6,
+                        padding: "2px 6px",
+                      }}
+                    >
+                      BUNDLE
+                    </span>
+                  )}
+                </div>
+                <div className="muted" style={{ fontSize: 12 }}>{part.isDealPart ? "Deal part" : part.partNumber}</div>
                 <button type="button" className="btn-primary" onClick={() => addToCart(part)}>
                   Add
                 </button>
               </div>
             ))}
           </div>
-
-          {dealParts.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span className="muted" style={{ fontSize: 12.5, fontWeight: 700 }}>Deal parts:</span>
-              <select
-                value={selectedDealPartId}
-                onChange={(e) => setSelectedDealPartId(e.target.value)}
-                style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
-              >
-                <option value="">Pick a bundle...</option>
-                {dealParts.map((d) => (
-                  <option key={d.id} value={d.id}>{d.printName}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn-primary"
-                style={{ padding: "8px 16px" }}
-                disabled={!selectedDealPartId}
-                onClick={() => {
-                  const deal = dealParts.find((d) => d.id === selectedDealPartId);
-                  if (deal) addDealToCart(deal);
-                  setSelectedDealPartId("");
-                }}
-              >
-                Add bundle
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="glass-card" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
