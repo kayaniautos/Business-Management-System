@@ -5,6 +5,78 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-10 — Built vehicle fitment search (model + year range)
+
+**What triggered this:** Mehmoon asked directly when part search by car
+model/year would exist. Checked the planning docs before designing
+anything - it's already a confirmed requirement (handover doc §6.2:
+"vehicle fitment/compatibility search — by vehicle model + year
+range... or directly by control part number"), not something to invent
+from scratch. Walked through the actual mechanics with him first
+(a customer asking for "Corolla 2012" when Corolla spans 2009-2016 in
+the system, and one part fitting Corolla/Prius/Premio at once) before
+writing code, since both were already solved by the existing schema
+and just needed the search query to use them.
+
+**Decision on year disambiguation:** resolve "which Corolla" by having
+staff pick the right row from a dropdown, not by asking the backend to
+parse a typed year against ranges. Each `car_models` row already is
+one model generation with its own `yearFrom`/`yearTo` - the ambiguity
+customers create ("Corolla 2012") disappears once the row itself
+carries its range and that range is shown in the picker
+("Corolla (2009-2016)" vs. "Corolla (2017-2019)" as two distinct,
+visually distinguishable options).
+
+**Decision on the dropdown vs. free-text question**, asked directly:
+dropdowns, not typed make/model text. This is a small, curated,
+staff-controlled list (created via the existing "Attach fitment" flow
+in Inventory), not open-ended data - a dropdown removes typo risk
+entirely and matches the "minimal typing" constraint for counter
+staff, at the cost of a model needing to already exist as a
+`car_models` row before it's searchable (same limitation fitment
+tagging already has today).
+
+**Key design choices:**
+- **Make -> Model cascading, not one flat model list** - keeps the
+  Model dropdown short and scannable rather than every model across
+  every make at once.
+- **Selecting a model searches immediately** - no extra "Search"
+  click, since the whole point was reducing friction for counter
+  staff mid-conversation with a customer.
+- **`q` became optional** on the search endpoint (was required) -
+  browsing everything fitted to a model with no typed text is a real,
+  intentional search mode, not an edge case to route around.
+- **A real, adjacent gap got closed to make this usable at all**: the
+  Inventory screen's "create car model" form never had Year From/Year
+  To fields, even though the backend endpoint already accepted them -
+  every car model in the database had `null` years, which would have
+  made this whole feature functionally useless on day one. Added the
+  two missing inputs rather than building a search feature nobody
+  could actually populate data for.
+- **Deal Parts never appear in a fitment-only browse** - they have no
+  concept of vehicle fitment, so a `carModelId` search correctly
+  excludes them regardless of the `includeDealParts` flag.
+- **Shared label formatter (`carModelLabel` in `api.ts`)**, not
+  duplicated string-building in two components - both POS's new
+  Make/Model picker and Inventory's existing fitment picker need the
+  exact same "Model (year-year)" formatting, and duplicating it would
+  risk the two drifting apart later.
+
+**Verified end to end through the real UI** (plus curl for the setup
+and one disambiguation check): created two real Corolla generations
+(2009-2016 and 2017-2019), attached one real part to only the
+2009-2016 row; through the actual browser, picked Toyota then
+"Corolla (2009-2016)" and confirmed only that one part appeared;
+separately confirmed via curl that picking "Corolla (2017-2019)"
+instead returns zero results - the range-based disambiguation actually
+works, not just in theory; created a brand-new car model ("Honda
+City," 2012-2018) through the real Inventory UI's new year inputs and
+confirmed via the database the range was stored exactly as entered.
+
+**Source:** Mehmoon, 2026-09-10.
+
+---
+
 ## 2026-09-10 — Merged Deal Parts into the regular POS search results
 
 **What triggered this:** Mehmoon pointed out that a real Deal Part
