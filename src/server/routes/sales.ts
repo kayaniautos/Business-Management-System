@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
   salesDocuments,
@@ -9,6 +9,7 @@ import {
   salesDocumentDiscounts,
   legalEntities,
   controlParts,
+  dealParts,
   parties,
 } from "../../db/schema/index.js";
 import { assignDocumentNumber } from "../services/document-numbers.js";
@@ -20,12 +21,21 @@ import {
   SalesDocumentValidationError,
 } from "../services/sales-document-helpers.js";
 
-const checkoutLineSchema = z.object({
-  controlPartId: z.string().uuid(),
-  quantity: z.number().int().min(1),
-  unitGrossPrice: z.number().min(0),
-  displayName: z.string().min(1).max(200).optional(),
-});
+const checkoutLineSchema = z
+  .object({
+    // Exactly one of these two — a regular part or a Deal Part bundle
+    // (CLAUDE.md 5.4). Checkout is the only sales document type that
+    // currently sells Deal Parts; Quotation/DN keep their own
+    // controlPartId-only line schemas unchanged.
+    controlPartId: z.string().uuid().optional(),
+    dealPartId: z.string().uuid().optional(),
+    quantity: z.number().int().min(1),
+    unitGrossPrice: z.number().min(0),
+    displayName: z.string().min(1).max(200).optional(),
+  })
+  .refine((l) => Boolean(l.controlPartId) !== Boolean(l.dealPartId), {
+    message: "Each line must reference exactly one part or deal part",
+  });
 
 const checkoutDiscountSchema = z.object({
   label: z.string().min(1).max(200),
@@ -77,9 +87,17 @@ const salesDocumentDetailSchema = salesDocumentSummarySchema.extend({
       lineNumber: z.number(),
       // Needed by the "convert from Quotation" flow to actually submit a
       // valid controlPartId (partNumber/catalogName alone aren't enough
-      // to identify the part on the new document).
-      controlPartId: z.string(),
-      partNumber: z.string(),
+      // to identify the part on the new document). Nullable since a line
+      // can instead be a Deal Part (CLAUDE.md 5.4) — Quotation/DN don't
+      // create those lines themselves yet, but Sales History reads every
+      // document type through this one endpoint, including checkout
+      // invoices that can.
+      controlPartId: z.string().nullable(),
+      dealPartId: z.string().nullable(),
+      // Null only for a Deal Part line — bundles have no part number.
+      partNumber: z.string().nullable(),
+      // Always present: the catalog part's name, or the Deal Part's
+      // print name, whichever the line actually references.
       catalogName: z.string(),
       displayName: z.string().nullable(),
       quantity: z.number(),
@@ -194,16 +212,18 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
       const lineRows = await db
         .select({
           lineNumber: salesDocumentLines.lineNumber,
-          controlPartId: controlParts.id,
+          controlPartId: salesDocumentLines.controlPartId,
+          dealPartId: salesDocumentLines.dealPartId,
           partNumber: controlParts.partNumber,
-          catalogName: controlParts.name,
+          catalogName: sql<string>`coalesce(${controlParts.name}, ${dealParts.printName})`,
           displayName: salesDocumentLines.displayName,
           quantity: salesDocumentLines.quantity,
           unitGrossPrice: salesDocumentLines.unitGrossPrice,
           lineGrossAmount: salesDocumentLines.lineGrossAmount,
         })
         .from(salesDocumentLines)
-        .innerJoin(controlParts, eq(salesDocumentLines.controlPartId, controlParts.id))
+        .leftJoin(controlParts, eq(salesDocumentLines.controlPartId, controlParts.id))
+        .leftJoin(dealParts, eq(salesDocumentLines.dealPartId, dealParts.id))
         .where(eq(salesDocumentLines.salesDocumentId, id))
         .orderBy(salesDocumentLines.lineNumber);
 
@@ -339,6 +359,7 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
             salesDocumentId: doc.id,
             lineNumber: i + 1,
             controlPartId: line.controlPartId,
+            dealPartId: line.dealPartId,
             displayName: line.displayName,
             quantity: line.quantity,
             unitGrossPrice: line.unitGrossPrice.toFixed(2),

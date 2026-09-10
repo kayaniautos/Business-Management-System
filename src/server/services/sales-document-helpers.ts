@@ -1,6 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "../../db/client.js";
-import { controlParts, legalEntities, parties } from "../../db/schema/index.js";
+import { controlParts, dealParts, legalEntities, parties } from "../../db/schema/index.js";
 
 /**
  * Shared validation + line math for the sales document chain (checkout
@@ -11,7 +11,13 @@ import { controlParts, legalEntities, parties } from "../../db/schema/index.js";
  */
 
 export interface SalesLineInput {
-  controlPartId: string;
+  // Exactly one of these two is set per line — enforced by the caller's
+  // Zod schema (checkoutLineSchema in sales.ts is the only one that
+  // actually allows dealPartId; Quotation/DN still only accept
+  // controlPartId, so this stays optional here without changing their
+  // behavior).
+  controlPartId?: string;
+  dealPartId?: string;
   quantity: number;
   unitGrossPrice: number;
 }
@@ -39,14 +45,43 @@ export async function snapshotPartyTaxInfo(partyId: string | undefined) {
   return { customerGstNo: party.gstNo ?? undefined, customerNtnNo: party.ntnNo ?? undefined };
 }
 
+/**
+ * Validates that every line's reference actually exists — a control part
+ * for a regular line, a Deal Part (CLAUDE.md 5.4) for a bundle line. Also
+ * rejects a line carrying neither or both references, since the schemas
+ * that allow dealPartId (checkoutLineSchema) enforce "exactly one" via
+ * Zod but this is the one place shared by every caller, including ones
+ * whose own schema doesn't have dealPartId at all.
+ */
 export async function requireControlPartsExist(lines: SalesLineInput[]) {
-  const partIds = [...new Set(lines.map((l) => l.controlPartId))];
-  const found = await db
-    .select({ id: controlParts.id })
-    .from(controlParts)
-    .where(inArray(controlParts.id, partIds));
-  if (found.length !== partIds.length) {
-    throw new SalesDocumentValidationError("One or more parts were not found");
+  for (const line of lines) {
+    if (Boolean(line.controlPartId) === Boolean(line.dealPartId)) {
+      throw new SalesDocumentValidationError(
+        "Each line must reference exactly one part or deal part",
+      );
+    }
+  }
+
+  const partIds = [...new Set(lines.filter((l) => l.controlPartId).map((l) => l.controlPartId!))];
+  if (partIds.length > 0) {
+    const found = await db
+      .select({ id: controlParts.id })
+      .from(controlParts)
+      .where(inArray(controlParts.id, partIds));
+    if (found.length !== partIds.length) {
+      throw new SalesDocumentValidationError("One or more parts were not found");
+    }
+  }
+
+  const dealPartIds = [...new Set(lines.filter((l) => l.dealPartId).map((l) => l.dealPartId!))];
+  if (dealPartIds.length > 0) {
+    const found = await db
+      .select({ id: dealParts.id })
+      .from(dealParts)
+      .where(inArray(dealParts.id, dealPartIds));
+    if (found.length !== dealPartIds.length) {
+      throw new SalesDocumentValidationError("One or more deal parts were not found");
+    }
   }
 }
 
