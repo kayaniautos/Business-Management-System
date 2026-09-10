@@ -5,6 +5,139 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-10 — Built real Deal Part (Form C)
+
+**Decision:** Built Deal Part over the other two candidates on the table
+(Invoice-from-DN, wiring Stock Adjustment's ledger into real sales) -
+Mehmoon's choice. First bundling feature: two or more Items sold and
+printed under one manually-typed name.
+
+**Key design choices:**
+- **`deal_parts` + `deal_part_components`, no price and no stock on
+  either.** Matches the confirmed spec exactly - "the bundle itself
+  never holds stock... pricing is decided at time of sale, not cached on
+  the Deal Part definition." The components table only records the
+  recipe (which parts, how many of each per bundle).
+- **Selling one reuses `sales_document_lines`, not a new line table.**
+  Made `controlPartId` nullable and added a nullable `dealPartId` -
+  exactly one of the two is set per line, enforced at the application
+  layer (same pattern already used for the discount/phone-number caps),
+  not a database CHECK constraint.
+- **Scoped to POS checkout only for actually selling a bundle.** Only
+  `checkoutLineSchema` (sales.ts) was widened to accept `dealPartId`;
+  Quotation's and DN's own line schemas are untouched and still require
+  `controlPartId`, so neither can create a Deal Part line yet - kept
+  deliberately narrow rather than touching three document-creation flows
+  in one pass. `GET /api/sales/:id` (shared by Sales History and DN's
+  "convert from Quotation" flow) still had to be updated regardless,
+  since it reads every document type through one endpoint - `partNumber`
+  is now nullable, `catalogName` is always present via
+  `COALESCE(controlParts.name, dealParts.printName)`. DN's own "from
+  Quotation" line picker now filters to lines that actually have a
+  `controlPartId` - not a real scenario yet since Quotation can't
+  produce a Deal Part line, but the type is honestly nullable now, so
+  the UI shouldn't quietly assume otherwise.
+- **"A Deal Part sale posts stock movement against the underlying
+  Items" was NOT built.** No sales feature of any kind - checkout,
+  Quotation, or DN - touches the `stock_movements` ledger yet (built for
+  Stock Adjustment). This is a pre-existing, already-flagged gap; Deal
+  Part didn't introduce it and doesn't need to be the one to close it.
+
+**Found and flagged, not fixed here:** while reading `sales.ts` for this
+work, noticed POS checkout calls `snapshotPartyTaxInfo(partyId)` but
+discards the result, unlike Quotation and DN, which both save it. Every
+checkout Invoice with a party attached has been saving `null` for
+customer GST/NTN instead of the party's real values. Spun off as a
+separate task rather than folded into this change, since it's an
+unrelated pre-existing bug.
+
+**Verified end to end through the real UI** (plus curl for the
+regression/rejection checks): created a bundle ("Oil Change Combo," two
+components) through the new Deal Parts screen; added it to a POS cart,
+where it showed as "Deal part" in place of a part number; entered a
+gross price and checked out (KT-INV-0004, Rs 750.00); confirmed it in
+Sales History with the correct name, "Deal part" label, and total.
+Separately confirmed via curl that a regular part-only checkout still
+works unchanged, and that a line with both or neither of
+`controlPartId`/`dealPartId` set is rejected with 400.
+
+**Source:** Mehmoon, 2026-09-10.
+
+---
+
+## 2026-09-10 — Client answered a direct question list; chart of accounts confirmed final, five-role list confirmed
+
+**What happened:** Mehmoon received two files from the client: `chart of accounts.xlsx`
+(re-sent) and a new `Question list.docx` containing the client's own written answers to a
+question list Mehmoon had sent. Extracted both (`unzip` + a throwaway Node script for the
+`.docx`'s `word/document.xml`, and Node + shared-string resolution for the `.xlsx` - same
+"no pandoc/real Python on this machine" workaround already logged in CLAUDE.md section 13)
+and compared against what this repo already assumes/has built. Full verbatim Q&A preserved
+in `docs/planning/client-qa-2026-09-10.md`.
+
+**Chart of accounts.xlsx: no new content.** Verified cell-by-cell against what's already
+seeded (`src/db/schema/accounts.ts`, `src/db/seed.ts`) - exact match, same file/version
+already logged as "version 2" in CLAUDE.md section 4 (updated to match on 2026-09-08). Also
+contains the same 19-item Reports list and 9-item Vouchers list already known from
+`kayani-erp-full-export.md`.
+
+**Question list.docx: real, resolving content.** Several open items moved:
+
+1. **Chart of accounts confirmed final** ("Chart of accounts are final but you should
+   define coding in a way to create space for future expansion... reports would be based on
+   classification on the basis of party form.") - this is the client sign-off CLAUDE.md
+   section 4 previously said was still missing. Two explicit requirements attached: coding
+   must be expansion-ready (no scheme given yet), and report classification runs through
+   the Party Form, not the account code alone. The one thing not explicitly addressed: the
+   possible duplicate-looking Income Tax Payable/GST Payable pair - treating it as accepted
+   as-is since the client didn't flag it when confirming the list as final.
+
+2. **Five-role list confirmed.** Asked "how many user roles... list the staff types," the
+   client answered with exactly the five roles already seeded in this repo (Counter
+   Control/Corporate Control/Receipts-Payments Control/Inventory Control/Management
+   Control) - this retires the competing three-tier Owner/Manager/Cashier candidate that
+   CLAUDE.md section 6 flagged as equally unconfirmed. **Per-role permissions are still
+   open** - asked directly what each role should be allowed to do, his answer was "It has
+   to be flexible and I can choose or edit at any time," which confirms the
+   runtime-configurable-permissions principle already assumed but gives no default
+   permission matrix.
+
+3. **1A vs Control Part Form relationship - largely resolved.** Asked to explain the
+   connection, the client described the same three-step chain already built (Markers
+   Control Form -> Item Creation Form -> Control Part Number, parent/child linking), not
+   the more elaborate "Form 1A governs fields a)-h) of Form A" reading pulled from the
+   handover doc's transcription. Treating the simpler, already-built structure as
+   confirmed. Still open: exactly where Form A's lettered fields/RPP/SAP/Print
+   Name/Safety Stock Days sit within that chain - his answer to a related question ("what
+   info do you record for a new part" -> "as per item creation form... detailed
+   discussion again if need be") suggests he's open to a concrete walkthrough, not that
+   this is settled.
+
+4. **Reports list: still NOT final**, despite the chart of accounts being confirmed. His
+   own words: "bear with me for reports." The three-way Reports/Vouchers conflict in
+   CLAUDE.md section 8 stays open. He did confirm report *visibility* maps to the five
+   confirmed role groups.
+
+5. **Migration source question did not land.** Asked to name his current system and share
+   sample Excel files, his answer - "All is through system except that info is not
+   structured. Moreover couldn't understand what you are asking" - shows the question
+   itself needs rephrasing, not that there's nothing to migrate. No files were shared.
+   Still open, CLAUDE.md section 9.
+
+**Updated:** CLAUDE.md sections 4 (chart of accounts), 5.2 (1A/Control Part), 5.8/6
+(roles), 8 (reports), 9 (migration), 11 (open-questions list) to reflect all of the above.
+New source file `docs/planning/client-qa-2026-09-10.md` added, referenced from CLAUDE.md's
+top-of-file pointer list alongside the other two planning documents.
+
+**Not done:** no schema or code changes - this was a documentation-only reconciliation
+pass, consistent with how the 2026-09-08 planning import was handled (log first, build
+later, once the client's answers are digested).
+
+**Source:** `Question list.docx` and `chart of accounts.xlsx`, sent by the client (Ghaus
+Kayani), relayed by Mehmoon, 2026-09-10.
+
+---
+
 ## 2026-09-10 — Built real Stock Adjustment (Form F), plus the first stock-quantity ledger
 
 **Decision:** Built Stock Adjustment (CLAUDE.md 5.7) over the other two
@@ -1012,20 +1145,26 @@ sign-off, since they're easily changed later without a data-shape impact.
 Do not resolve these silently. See `CLAUDE.md` section 6 and inline
 `[unclear — confirm]` comments in the schema for full context.
 
-- Exact relationship between the Markers/Items form and the Control Part
-  form (`src/db/schema/inventory.ts`).
+- ~~Exact relationship between the Markers/Items form and the Control Part
+  form~~ — **largely resolved 2026-09-10**, client confirmed the same
+  three-step chain already built. See CLAUDE.md section 5.2 for the
+  narrower remaining gap (where Form A's fuller field set sits in that
+  chain).
 - Whether "parent/child linking" in the inventory structure applies at the
   Control Part level (as modeled), the Item level, or across all three.
 - Whether a user can hold more than one role at once (`user_roles` modeled
   as many-to-many to avoid foreclosing either answer).
-- **Authority Levels module** — flagged in CLAUDE.md as needing its own
-  requirements conversation. The RBAC scaffold built in this pass
-  (`roles` / `permissions` / `role_permissions`) is being treated as a
-  *different* concept from Authority Levels (basic access control vs. what
-  we're assuming is approval/spending-limit tiers). Not confirmed — if
-  they turn out to be the same thing, this schema needs revisiting.
-- Chart of accounts numbering/coding scheme ("expansion-ready" per the
-  client, but no scheme was provided).
-- "Party Form" for report classification — no details exist yet; not built.
+- **Authority Levels module** — the five-role *list* is now confirmed
+  (2026-09-10, CLAUDE.md sections 5.8/6), but per-role permissions and
+  whether "Authority Levels" (Form G) is the same concept as this RBAC
+  scaffold are both still open. Do not extend the scaffold toward
+  approval-limit logic until that's settled.
+- Chart of accounts numbering/coding scheme — **confirmed as a
+  requirement 2026-09-10** ("define coding in a way to create space for
+  future expansion"), but no actual scheme has been provided or proposed
+  yet.
+- "Party Form" for report classification — **confirmed as the basis for
+  report classification 2026-09-10**, but the reports list itself is
+  still not final ("bear with me for reports" — CLAUDE.md section 8).
 - Document-number collision risk across simultaneously-offline terminals
   (see UUIDv7 entry above).
