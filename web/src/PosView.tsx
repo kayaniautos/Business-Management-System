@@ -1,9 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
+  carModelLabel,
   checkout,
+  getCarModels,
   getEntities,
   getParties,
   searchParts,
+  type CarModel,
   type CheckoutDiscount,
   type CheckoutResult,
   type LegalEntity,
@@ -37,6 +40,14 @@ export function PosView({ user }: { user: LoginResult }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PartSearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
+  // Vehicle fitment search (handover doc §6.2: "by vehicle model + year
+  // range") — cascading Make -> Model, where each Model option is
+  // labeled with its own year range so picking it resolves "which
+  // generation" without a separate year field (Mehmoon's direction
+  // 2026-09-10).
+  const [carModels, setCarModels] = useState<CarModel[]>([]);
+  const [selectedMake, setSelectedMake] = useState("");
+  const [selectedCarModelId, setSelectedCarModelId] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discounts, setDiscounts] = useState<CheckoutDiscount[]>([]);
   const [discountLabel, setDiscountLabel] = useState("");
@@ -51,23 +62,41 @@ export function PosView({ user }: { user: LoginResult }) {
       if (list.length > 0) setEntityId(list[0].id);
     });
     getParties({ nature: "S3" }).then(setCustomers).catch(() => {});
+    getCarModels().then(setCarModels).catch(() => {});
   }, []);
 
   const selectedEntity = entities?.find((e) => e.id === entityId);
   const canDiscount = selectedEntity?.name === KIYANI_AUTOS;
 
-  async function handleSearch(e: FormEvent) {
-    e.preventDefault();
+  const makes = [...new Set(carModels.map((c) => c.make))].sort();
+  const modelsForMake = carModels.filter((c) => c.make === selectedMake);
+
+  async function runSearch(carModelId?: string) {
     setSearchError(null);
+    if (!q.trim() && !carModelId) {
+      setResults([]);
+      return;
+    }
     try {
       // Deal Parts (CLAUDE.md 5.4) merged into the same results — POS is
       // the only screen that can sell one, so it's the only search call
       // that opts in (Mehmoon's direction 2026-09-10: a bundle should show
-      // up "same like other items," not in a separate picker).
-      setResults(await searchParts(q, true));
+      // up "same like other items," not in a separate picker). Deal Parts
+      // have no fitment, so they only ever show up when there's a typed q.
+      setResults(await searchParts(q, { includeDealParts: true, carModelId }));
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "Search failed");
     }
+  }
+
+  async function handleSearch(e: FormEvent) {
+    e.preventDefault();
+    await runSearch(selectedCarModelId || undefined);
+  }
+
+  function handleSelectModel(carModelId: string) {
+    setSelectedCarModelId(carModelId);
+    runSearch(carModelId || undefined);
   }
 
   function addToCart(part: PartSearchResult) {
@@ -170,6 +199,48 @@ export function PosView({ user }: { user: LoginResult }) {
               Search
             </button>
           </form>
+
+          {carModels.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="muted" style={{ fontSize: 12.5, fontWeight: 700 }}>Or find by vehicle:</span>
+              <select
+                value={selectedMake}
+                onChange={(e) => {
+                  setSelectedMake(e.target.value);
+                  handleSelectModel("");
+                }}
+                style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
+              >
+                <option value="">Make...</option>
+                {makes.map((make) => (
+                  <option key={make} value={make}>{make}</option>
+                ))}
+              </select>
+              <select
+                value={selectedCarModelId}
+                onChange={(e) => handleSelectModel(e.target.value)}
+                disabled={!selectedMake}
+                style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
+              >
+                <option value="">Model...</option>
+                {modelsForMake.map((c) => (
+                  <option key={c.id} value={c.id}>{carModelLabel(c)}</option>
+                ))}
+              </select>
+              {selectedCarModelId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMake("");
+                    handleSelectModel("");
+                  }}
+                  style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-300)", fontSize: 12.5 }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
           {searchError && <div className="error-text">{searchError}</div>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
             {results.map((part) => (
