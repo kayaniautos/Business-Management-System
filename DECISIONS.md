@@ -5,6 +5,69 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-10 — Wired real stock movements into sales
+
+**Decision:** Built over the other two candidates on the table
+(finishing role-based nav visibility, Invoice-from-DN) - Mehmoon's
+choice. Closes a gap flagged in both the Stock Adjustment and Deal
+Part entries above: `stock_movements` existed and worked, but nothing
+selling a part actually wrote to it - checkout, Quotation, and DN all
+moved money without ever moving stock.
+
+**Key design choices:**
+- **One shared function, not three separate implementations.**
+  `applyStockMovementsForDocument(tx, salesDocumentId, direction)`
+  reads a document's lines back from the database rather than taking
+  them as a parameter - the same function works whether the lines
+  were just inserted in this transaction (checkout) or created in an
+  earlier request (DN post/unpost).
+- **Deal Part lines expand into per-component rows**, not one row for
+  the bundle - there's no "stock" concept for a Deal Part itself
+  (confirmed already, Deal Part entry above), so the only correct
+  place to record the effect is the underlying Items, one row each,
+  quantity = line qty * component qty.
+- **Checkout decrements in the same transaction as creation**, since
+  an Invoice posts itself immediately at the point of sale - there's
+  no separate "post" moment to hook into. **DN decrements on POST,
+  not on draft creation** - matches the confirmed Post/Unpost pattern
+  ("posting finalizes a document's stock effect"). **Unposting writes
+  a reversal row, not a delete** - keeps the ledger's append-only
+  design intact (same reasoning as the original Stock Adjustment
+  decision to use a ledger over a mutable column) and preserves a
+  full audit trail of both the original sale and its reversal.
+- **Quotation still writes nothing** - already confirmed "zero
+  accounting impact," this pass didn't touch quotations.ts at all.
+- **Negative stock is allowed, not blocked.** Nothing in the client's
+  notes says whether selling past zero (backorder) should be a hard
+  stop or just a soft signal - inventing a block either way would be
+  a real, unconfirmed business rule. The ledger just records what
+  happened; a part's current quantity can go negative.
+- **`reasonComment` became nullable** on `stock_movements` - only
+  "adjustment" rows (Form F's own mandatory-comment requirement) need
+  one; a "sale" row traces back to its document via the new
+  `salesDocumentId` column instead. Stock Adjustment's own history
+  list now explicitly filters to `movementType = "adjustment"`, since
+  it shares the table with sale rows now and would otherwise start
+  showing them too.
+
+**Verified end to end**, curl for the arithmetic checks plus one real
+browser pass: seeded 50 and 30 starting units on two parts via real
+Stock Adjustments; checked out 3 units of a regular part and confirmed
+the quantity dropped to 47; sold 3 units of a real two-component Deal
+Part and confirmed both components dropped by exactly line-qty times
+component-qty (6 and 3); created a DN as draft and confirmed zero
+stock effect, posted it and confirmed the decrement, unposted it and
+confirmed exact restoration, re-posted it and confirmed it decremented
+again; created a 10-unit Quotation and confirmed zero stock effect;
+confirmed the Stock Adjustment history screen still shows only the
+two manual rows, not any sale movements; and separately ran a real
+checkout through the actual browser UI (not just curl) and confirmed
+the resulting quantity matched.
+
+**Source:** Mehmoon, 2026-09-10.
+
+---
+
 ## 2026-09-10 — Separate admin login, nav gating, PIN lockout, and logout
 
 **What triggered this:** immediately after the Admin Settings module
