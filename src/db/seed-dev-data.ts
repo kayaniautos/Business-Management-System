@@ -49,6 +49,28 @@ async function main() {
       });
   }
 
+  // Dev-only bootstrap admin (2026-09-10) — NOT Ghaus's real account.
+  // Exists purely so the Admin Settings feature is reachable at all
+  // without a chicken-and-egg problem (only an admin can grant admin
+  // access, so the very first one has to come from somewhere). Real
+  // deployment: log in with this account once, then grant Ghaus's real
+  // account admin access through the UI and deactivate/repurpose this
+  // one — his real email/password were never provided, so they were
+  // never invented here.
+  const adminPinHash = await bcrypt.hash("0000", 10);
+  const adminPasswordHash = await bcrypt.hash("admin1234", 10);
+  await db
+    .insert(users)
+    .values({
+      username: "admin.dev",
+      fullName: "Dev Admin (bootstrap only)",
+      passwordHash: adminPinHash,
+      adminIdentifier: "admin@kayaniautos.local",
+      adminPasswordHash,
+      isAdmin: true,
+    })
+    .onConflictDoNothing({ target: users.username });
+
   // markers.name and items.name have no unique constraint (see
   // inventory.ts) — check-then-insert here rather than onConflictDoNothing,
   // which needs a real unique/exclusion constraint to target.
@@ -126,6 +148,7 @@ async function main() {
   }
 
   console.log("Dev sample data seeded. Login: asif.raza / PIN 1234");
+  console.log("Dev admin bootstrap: admin.dev via Admin Login, admin@kayaniautos.local / admin1234");
 }
 
 main()
