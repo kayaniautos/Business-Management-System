@@ -7,7 +7,8 @@ export type View =
   | "inventory"
   | "parties"
   | "sales-history"
-  | "stock-adjustments";
+  | "stock-adjustments"
+  | "deal-parts";
 
 const VIEW_LABELS: Record<View, string> = {
   pos: "POS Counter",
@@ -17,6 +18,7 @@ const VIEW_LABELS: Record<View, string> = {
   parties: "Parties",
   "sales-history": "Sales History (Ctrl+H)",
   "stock-adjustments": "Stock Adjustment",
+  "deal-parts": "Deal Parts",
 };
 
 export function AppHeader({
@@ -52,6 +54,7 @@ export function AppHeader({
               "delivery-notes",
               "inventory",
               "stock-adjustments",
+              "deal-parts",
               "parties",
               "sales-history",
             ] as const

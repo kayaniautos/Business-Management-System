@@ -135,16 +135,23 @@ export function DeliveryNoteView() {
     setDiscountAmount("");
   }
 
-  /** The actual line set that will be submitted, resolved from whichever mode is active. */
+  /**
+   * The actual line set that will be submitted, resolved from whichever
+   * mode is active. DN doesn't support Deal Part lines yet (only POS
+   * checkout does — CLAUDE.md 5.4) — a Quotation can't actually produce
+   * one today since QuotationView never creates dealPartId lines, but
+   * `controlPartId` is nullable on the shared detail type now, so this
+   * filters defensively rather than assuming it's always present.
+   */
   function resolveLines() {
     if (mode === "new") {
       return newLines.map((l) => ({ controlPartId: l.controlPartId, quantity: l.quantity, unitGrossPrice: l.unitGrossPrice }));
     }
     if (!sourceDetail) return [];
     return sourceDetail.lines
-      .filter((l) => selectedQuoteLines[l.lineNumber]?.checked)
+      .filter((l) => l.controlPartId && selectedQuoteLines[l.lineNumber]?.checked)
       .map((l) => ({
-        controlPartId: l.controlPartId,
+        controlPartId: l.controlPartId as string,
         quantity: selectedQuoteLines[l.lineNumber].quantity,
         unitGrossPrice: Number(l.unitGrossPrice),
       }));
@@ -271,7 +278,7 @@ export function DeliveryNoteView() {
           <div className="glass-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>Pick lines to carry onto this DN</div>
             {!sourceDetail && <div className="muted" style={{ fontSize: 13 }}>Select a quotation above.</div>}
-            {sourceDetail?.lines.map((l) => (
+            {sourceDetail?.lines.filter((l) => l.controlPartId).map((l) => (
               <label key={l.lineNumber} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
                 <input type="checkbox" checked={selectedQuoteLines[l.lineNumber]?.checked ?? false} onChange={(e) => toggleQuoteLine(l.lineNumber, e.target.checked)} style={{ width: 20, height: 20 }} />
                 <span style={{ flex: 1 }}>{l.displayName ?? l.catalogName} <span className="muted">({l.partNumber})</span></span>

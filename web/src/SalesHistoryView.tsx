@@ -170,7 +170,7 @@ export function SalesHistoryView() {
                 <div>
                   <div style={{ fontWeight: 700 }}>{line.displayName ?? line.catalogName}</div>
                   <div className="muted" style={{ fontSize: 11 }}>
-                    {line.partNumber} &middot; {line.quantity} &times; Rs {line.unitGrossPrice}
+                    {line.partNumber ?? "Deal part"} &middot; {line.quantity} &times; Rs {line.unitGrossPrice}
                   </div>
                 </div>
                 <div style={{ fontWeight: 700 }}>Rs {line.lineGrossAmount}</div>

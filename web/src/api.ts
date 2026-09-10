@@ -56,7 +56,10 @@ export async function getEntities(): Promise<LegalEntity[]> {
 }
 
 export interface CheckoutLine {
-  controlPartId: string;
+  // Exactly one of these two — Quotation/DN never send dealPartId (their
+  // backend routes don't accept it), only POS checkout does.
+  controlPartId?: string;
+  dealPartId?: string;
   quantity: number;
   unitGrossPrice: number;
   displayName?: string;
@@ -227,8 +230,14 @@ export interface SalesDocumentDetail extends SalesDocumentSummary {
   partyId: string | null;
   lines: {
     lineNumber: number;
-    controlPartId: string;
-    partNumber: string;
+    // Exactly one of these two is set — null for the other. Only a
+    // checkout-created Invoice can currently have a dealPartId line;
+    // Quotation/DN lines always have controlPartId.
+    controlPartId: string | null;
+    dealPartId: string | null;
+    // Null only for a Deal Part line.
+    partNumber: string | null;
+    // Always present: catalog part name, or the Deal Part's print name.
     catalogName: string;
     displayName: string | null;
     quantity: number;
@@ -313,3 +322,19 @@ export const createStockAdjustment = (input: {
   quantityDelta: number;
   reasonComment: string;
 }) => postJson<StockAdjustmentResult>("/api/stock-adjustments", input);
+
+export interface DealPart {
+  id: string;
+  printName: string;
+  description: string | null;
+  components: { controlPartId: string; partNumber: string; name: string; quantity: number }[];
+}
+
+export const getDealParts = (q?: string) =>
+  getJson<DealPart[]>(`/api/deal-parts${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+
+export const createDealPart = (input: {
+  printName: string;
+  description?: string;
+  components: { controlPartId: string; quantity: number }[];
+}) => postJson<DealPart>("/api/deal-parts", input);

@@ -1,11 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   checkout,
+  getDealParts,
   getEntities,
   getParties,
   searchParts,
   type CheckoutDiscount,
   type CheckoutResult,
+  type DealPart,
   type LegalEntity,
   type LoginResult,
   type Party,
@@ -13,8 +15,13 @@ import {
 } from "./api.js";
 
 interface CartLine {
-  controlPartId: string;
-  partNumber: string;
+  // Stable React key / dedup identity — "part:<id>" or "deal:<id>", since
+  // a cart line is either a regular part or a Deal Part bundle (CLAUDE.md
+  // 5.4), never both.
+  key: string;
+  controlPartId?: string;
+  dealPartId?: string;
+  partNumber?: string;
   name: string;
   quantity: number;
   unitGrossPrice: number;
@@ -32,6 +39,8 @@ export function PosView({ user }: { user: LoginResult }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PartSearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [dealParts, setDealParts] = useState<DealPart[]>([]);
+  const [selectedDealPartId, setSelectedDealPartId] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discounts, setDiscounts] = useState<CheckoutDiscount[]>([]);
   const [discountLabel, setDiscountLabel] = useState("");
@@ -46,6 +55,7 @@ export function PosView({ user }: { user: LoginResult }) {
       if (list.length > 0) setEntityId(list[0].id);
     });
     getParties({ nature: "S3" }).then(setCustomers).catch(() => {});
+    getDealParts().then(setDealParts).catch(() => {});
   }, []);
 
   const selectedEntity = entities?.find((e) => e.id === entityId);
@@ -62,26 +72,36 @@ export function PosView({ user }: { user: LoginResult }) {
   }
 
   function addToCart(part: PartSearchResult) {
+    const key = `part:${part.id}`;
     setCart((prev) => {
-      const existing = prev.find((l) => l.controlPartId === part.id);
+      const existing = prev.find((l) => l.key === key);
       if (existing) {
-        return prev.map((l) =>
-          l.controlPartId === part.id ? { ...l, quantity: l.quantity + 1 } : l,
-        );
+        return prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity + 1 } : l));
       }
       return [
         ...prev,
-        { controlPartId: part.id, partNumber: part.partNumber, name: part.name, quantity: 1, unitGrossPrice: 0 },
+        { key, controlPartId: part.id, partNumber: part.partNumber, name: part.name, quantity: 1, unitGrossPrice: 0 },
       ];
     });
   }
 
-  function updateLine(controlPartId: string, patch: Partial<CartLine>) {
-    setCart((prev) => prev.map((l) => (l.controlPartId === controlPartId ? { ...l, ...patch } : l)));
+  function addDealToCart(deal: DealPart) {
+    const key = `deal:${deal.id}`;
+    setCart((prev) => {
+      const existing = prev.find((l) => l.key === key);
+      if (existing) {
+        return prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity + 1 } : l));
+      }
+      return [...prev, { key, dealPartId: deal.id, name: deal.printName, quantity: 1, unitGrossPrice: 0 }];
+    });
   }
 
-  function removeLine(controlPartId: string) {
-    setCart((prev) => prev.filter((l) => l.controlPartId !== controlPartId));
+  function updateLine(key: string, patch: Partial<CartLine>) {
+    setCart((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  }
+
+  function removeLine(key: string) {
+    setCart((prev) => prev.filter((l) => l.key !== key));
   }
 
   function addDiscount() {
@@ -103,7 +123,12 @@ export function PosView({ user }: { user: LoginResult }) {
     try {
       const result = await checkout(
         entityId,
-        cart.map((l) => ({ controlPartId: l.controlPartId, quantity: l.quantity, unitGrossPrice: l.unitGrossPrice })),
+        cart.map((l) => ({
+          controlPartId: l.controlPartId,
+          dealPartId: l.dealPartId,
+          quantity: l.quantity,
+          unitGrossPrice: l.unitGrossPrice,
+        })),
         canDiscount ? discounts : [],
         partyId || undefined,
       );
@@ -160,6 +185,35 @@ export function PosView({ user }: { user: LoginResult }) {
               </div>
             ))}
           </div>
+
+          {dealParts.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="muted" style={{ fontSize: 12.5, fontWeight: 700 }}>Deal parts:</span>
+              <select
+                value={selectedDealPartId}
+                onChange={(e) => setSelectedDealPartId(e.target.value)}
+                style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
+              >
+                <option value="">Pick a bundle...</option>
+                {dealParts.map((d) => (
+                  <option key={d.id} value={d.id}>{d.printName}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ padding: "8px 16px" }}
+                disabled={!selectedDealPartId}
+                onClick={() => {
+                  const deal = dealParts.find((d) => d.id === selectedDealPartId);
+                  if (deal) addDealToCart(deal);
+                  setSelectedDealPartId("");
+                }}
+              >
+                Add bundle
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="glass-card" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
@@ -179,13 +233,13 @@ export function PosView({ user }: { user: LoginResult }) {
           {cart.length === 0 && <div className="muted" style={{ fontSize: 13 }}>Cart is empty — search and add parts.</div>}
 
           {cart.map((line) => (
-            <div key={line.controlPartId} style={{ display: "flex", flexDirection: "column", gap: 8, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
+            <div key={line.key} style={{ display: "flex", flexDirection: "column", gap: 8, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13.5 }}>{line.name}</div>
-                  <div className="muted" style={{ fontSize: 11 }}>{line.partNumber}</div>
+                  <div className="muted" style={{ fontSize: 11 }}>{line.dealPartId ? "Deal part" : line.partNumber}</div>
                 </div>
-                <button type="button" onClick={() => removeLine(line.controlPartId)} style={{ border: "none", background: "transparent", color: "var(--ink-300)", cursor: "pointer", fontSize: 13, minHeight: 44, minWidth: 44 }}>
+                <button type="button" onClick={() => removeLine(line.key)} style={{ border: "none", background: "transparent", color: "var(--ink-300)", cursor: "pointer", fontSize: 13, minHeight: 44, minWidth: 44 }}>
                   Remove
                 </button>
               </div>
@@ -196,7 +250,7 @@ export function PosView({ user }: { user: LoginResult }) {
                     type="number"
                     min={1}
                     value={line.quantity}
-                    onChange={(e) => updateLine(line.controlPartId, { quantity: Math.max(1, Number(e.target.value)) })}
+                    onChange={(e) => updateLine(line.key, { quantity: Math.max(1, Number(e.target.value)) })}
                     style={{ width: 56, marginLeft: 6, padding: 6 }}
                   />
                 </label>
@@ -206,7 +260,7 @@ export function PosView({ user }: { user: LoginResult }) {
                     type="number"
                     min={0}
                     value={line.unitGrossPrice || ""}
-                    onChange={(e) => updateLine(line.controlPartId, { unitGrossPrice: Math.max(0, Number(e.target.value)) })}
+                    onChange={(e) => updateLine(line.key, { unitGrossPrice: Math.max(0, Number(e.target.value)) })}
                     style={{ width: 90, marginLeft: 6, padding: 6 }}
                   />
                 </label>
