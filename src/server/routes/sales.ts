@@ -20,6 +20,7 @@ import {
   computeAndValidateTotals,
   SalesDocumentValidationError,
 } from "../services/sales-document-helpers.js";
+import { applyStockMovementsForDocument } from "../services/stock-movements.js";
 
 const checkoutLineSchema = z
   .object({
@@ -120,6 +121,12 @@ const salesDocumentDetailSchema = salesDocumentSummarySchema.extend({
  * to a real party or stay walk-in (null), matching the POS mockup's
  * "Walk-in customer" default. Amounts are recomputed server-side from
  * quantity * unitGrossPrice, never trusted from the client.
+ *
+ * Real stock decrement wired in 2026-09-10 (Mehmoon's direction) — since
+ * checkout posts immediately, its stock effect (applyStockMovementsForDocument,
+ * services/stock-movements.ts) happens in the same transaction as
+ * creation. Quotation never writes to the stock ledger at all, matching
+ * its "zero accounting impact" spec.
  */
 export const salesRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -250,6 +257,13 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
    * is deliberately left as-is on unpost (the historical record of when
    * it was posted), not cleared - there's no `unpostedAt` column to
    * record the reversal time, a gap worth knowing about, not fixed here.
+   *
+   * Real stock effect wired in 2026-09-10: posting decrements stock for
+   * every line (applyStockMovementsForDocument, services/stock-movements.ts),
+   * unposting writes an equal-and-opposite reversal - both inside the
+   * same transaction as the status change, not a separate request, so a
+   * failure can't leave the status changed without the stock effect (or
+   * vice versa).
    */
   app.post(
     "/:id/post",
@@ -263,10 +277,13 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
       if (doc.status === "posted") {
         return reply.code(400).send({ error: "Already posted" });
       }
-      await db
-        .update(salesDocuments)
-        .set({ status: "posted", postedAt: new Date() })
-        .where(eq(salesDocuments.id, doc.id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(salesDocuments)
+          .set({ status: "posted", postedAt: new Date() })
+          .where(eq(salesDocuments.id, doc.id));
+        await applyStockMovementsForDocument(tx, doc.id, -1);
+      });
       return summarizeDocument(doc.id);
     },
   );
@@ -280,7 +297,10 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
       if (doc.status !== "posted") {
         return reply.code(400).send({ error: "Only a posted document can be unposted" });
       }
-      await db.update(salesDocuments).set({ status: "unposted" }).where(eq(salesDocuments.id, doc.id));
+      await db.transaction(async (tx) => {
+        await tx.update(salesDocuments).set({ status: "unposted" }).where(eq(salesDocuments.id, doc.id));
+        await applyStockMovementsForDocument(tx, doc.id, 1);
+      });
       return summarizeDocument(doc.id);
     },
   );
@@ -377,6 +397,10 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
             })),
           );
         }
+
+        // Checkout posts immediately, so its stock effect happens now too
+        // — DN/Invoice-via-/post instead apply this when actually posted.
+        await applyStockMovementsForDocument(tx, doc.id, -1);
 
         return doc;
       });

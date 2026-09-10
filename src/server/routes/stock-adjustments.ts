@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { controlParts, stockMovements } from "../../db/schema/index.js";
 
@@ -112,14 +112,22 @@ export const stockAdjustmentsRoutes: FastifyPluginAsync = async (fastify) => {
         .from(stockMovements)
         .innerJoin(controlParts, eq(stockMovements.controlPartId, controlParts.id))
         .where(
-          pattern
-            ? sql`${controlParts.partNumber} ilike ${pattern} or ${controlParts.name} ilike ${pattern}`
-            : undefined,
+          and(
+            // Sales now write to this same ledger too (2026-09-10) — keep
+            // this screen scoped to manual adjustments only, not sales.
+            eq(stockMovements.movementType, "adjustment"),
+            pattern
+              ? sql`${controlParts.partNumber} ilike ${pattern} or ${controlParts.name} ilike ${pattern}`
+              : undefined,
+          ),
         )
         .orderBy(desc(stockMovements.createdAt))
         .limit(100);
 
-      return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
+      // reasonComment is only nullable at the schema level for "sale" rows
+      // (services/stock-movements.ts) — every "adjustment" row, which is
+      // all this query returns, always has one (enforced by POST below).
+      return rows.map((r) => ({ ...r, reasonComment: r.reasonComment ?? "", createdAt: r.createdAt.toISOString() }));
     },
   );
 
@@ -161,7 +169,7 @@ export const stockAdjustmentsRoutes: FastifyPluginAsync = async (fastify) => {
         partNumber: part.partNumber,
         partName: part.name,
         quantityDelta: movement.quantityDelta,
-        reasonComment: movement.reasonComment,
+        reasonComment,
         createdAt: movement.createdAt.toISOString(),
         quantityAfter: await currentQuantity(controlPartId),
       };
