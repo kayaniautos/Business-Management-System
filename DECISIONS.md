@@ -5,6 +5,93 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-11 — Built Purchasing (Purchase Order → Goods Receipt → Purchase Invoice), first pass
+
+**What triggered this:** Mehmoon picked "Wire real stock movements into
+sales" and Deal Part merging as recent priorities; once real sales were
+correctly decrementing stock, the obvious next gap was that nothing in
+the app could ever increase it except a manual Stock Adjustment. Offered
+as one of four next-feature options (the others: a LIFO cost engine, a
+Party ledger/statement view, settlement channels) and picked as the
+recommended one, since it closes the loop on the stock ledger work
+already shipped.
+
+**Decision:** mirror the sales document chain's shape almost exactly —
+Purchase Order → Goods Receipt → Purchase Invoice as one shared
+`purchase_documents` header table with a `document_type` discriminator,
+`purchase_document_lines`, and a many-to-many `purchase_document_links`
+for the chain. This is a confirmed client requirement (handover doc
+§6.3), not a scope addition — it was simply never built.
+
+**Key design choices:**
+- **`partyId` is `NOT NULL`** on `purchase_documents`, unlike
+  `sales_documents.partyId` — a purchase always has a known supplier
+  (Nature S1/S2), there's no "walk-in supplier" equivalent to a walk-in
+  retail customer.
+- **Lines only ever reference a real control part**, never a Deal Part —
+  nobody buys a bundle from a supplier, so `purchase_document_lines`
+  doesn't need the nullable dual-reference pattern `sales_document_lines`
+  has.
+- **Stock moves on the Goods Receipt, not the Purchase Invoice.** The
+  client's own language is explicit: goods can be received "before the
+  supplier invoice arrives... reconciled later." So the Goods Receipt
+  owns the real stock effect (via post/unpost, same pattern as Delivery
+  Note), and the Purchase Invoice — created already `posted`, since an
+  arrived bill is a finalized event — writes zero stock movement of its
+  own. This is a genuine asymmetry with the sales side, where checkout's
+  Invoice DOES move stock directly; it's not an inconsistency, it reflects
+  that a Goods Receipt (something physically arriving) and a checkout
+  sale (something physically leaving at the same moment) are the same
+  *kind* of event, while a Purchase Invoice (paperwork catching up to
+  something that already happened) is not.
+- **Purchase Invoice cost is editable, independent of the receipt's
+  cost.** The UI defaults each line's cost to whatever the Goods Receipt
+  recorded but lets staff correct it — the real invoiced price can
+  legitimately differ from an estimated receiving price, and the client's
+  own spec frames the invoice as the reconciliation step specifically
+  because of this kind of gap.
+- **First pass invoices from exactly ONE Goods Receipt**, not several
+  merged together, even though handover doc §6.3 explicitly asks for
+  multi-receipt merging ("needs a defined UX path, not something bolted
+  on later"). Deliberate scope trim, not an oversight — matches the
+  precedent already accepted on the sales side, where an Invoice merging
+  multiple DNs isn't built either. Revisit if/when it's actually needed.
+- **No Supplier Payable ledger posting.** The accounting/ledger module
+  (CLAUDE.md section 8) doesn't exist yet — no sales document posts to
+  the chart of accounts either, so this isn't a purchasing-specific gap.
+  A Purchase Invoice records the transaction and its total, nothing more.
+
+**Real bug found and fixed in the process:** the header's own
+`backdropFilter: blur(24px)` (`AppHeader.tsx`) creates a CSS stacking
+context with an implicit z-index of 0 — the same bucket a `.glass-card`
+panel falls into (it also uses `backdrop-filter`). Ties in that bucket
+resolve by DOM order, and the header comes first, so the whole header —
+dropdown included — was painting *behind* page content, despite the
+dropdown's own explicit `zIndex: 20`. Sales/Inventory's 3-item dropdowns
+never reached far enough down to expose this; Purchasing's 4 items did,
+making "Purchase Invoices" and "Purchase History" genuinely unclickable.
+Confirmed via `document.elementFromPoint()` hit-testing before fixing.
+Fixed with one `zIndex: 30` on the header's root div. Not a regression
+introduced by this feature — the fragility already existed, just below
+the threshold of being noticed until a 4-item dropdown came along.
+
+**Verified end to end through the real UI** (plus curl for stock-quantity
+checks): created a Purchase Order for 10 units from the seeded "Metro
+Parts Supplier"; converted it to a Goods Receipt for a **partial**
+quantity (7 of 10) to prove partial-delivery support; confirmed stock
+stayed at 0 while draft; posted it and confirmed stock became exactly 7;
+unposted it and confirmed it reverted to exactly 0; re-posted and
+confirmed it returned to 7; created a Purchase Invoice from that receipt,
+correcting the unit cost from Rs 250 to Rs 260, and confirmed the total
+recalculated live and stock stayed at 7 afterward (no double-count);
+confirmed Purchase History lists all three documents with correct
+statuses and that the Invoice shows no Post/Unpost controls.
+
+**Source:** Mehmoon, 2026-09-11 (picked from a presented list of
+next-feature options).
+
+---
+
 ## 2026-09-10 — Replaced the range-label Model picker with a real Year dropdown
 
 **What triggered this:** immediately after shipping fitment search
