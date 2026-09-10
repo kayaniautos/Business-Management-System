@@ -6,6 +6,8 @@ import {
   deactivateUser,
   getAdminUsers,
   getRoles,
+  grantAdmin,
+  revokeAdmin,
   setUserRoles,
   type AdminUser,
   type Role,
@@ -13,18 +15,19 @@ import {
 
 /**
  * Admin Settings — role and staff-account management (CLAUDE.md 5.8:
- * "the admin must be able to create arbitrary roles at runtime"). This
- * is deliberately scoped to roles and users only — it does NOT include a
- * permissions-grant UI (what a role can actually do). CLAUDE.md 5.8 is
- * explicit that the `permissions`/`role_permissions` catalog stays
- * untouched until the Authority Levels scoping conversation with the
- * client happens; building a grant UI now would mean inventing
+ * "the admin must be able to create arbitrary roles at runtime"), plus
+ * granting/revoking admin access on any user (Mehmoon's direction
+ * 2026-09-10: Ghaus is admin and can make other users admin too). This
+ * is deliberately scoped to roles, users, and admin-status only — it
+ * does NOT include a permissions-grant UI (what a role can actually
+ * do). CLAUDE.md 5.8 is explicit that the `permissions`/`role_permissions`
+ * catalog stays untouched until the Authority Levels scoping conversation
+ * with the client happens; building a grant UI now would mean inventing
  * permission keys nobody has confirmed.
  *
- * Same as every other screen in this app so far: nothing here is gated
- * to an "admin" role, since no session/permission enforcement exists
- * yet (src/server/app.ts's own comment) — a pre-existing limitation,
- * not something new.
+ * The nav already hides this screen unless `user.isAdmin` (AppHeader.tsx),
+ * but the API underneath still isn't session-gated (src/server/app.ts's
+ * own comment) — a pre-existing limitation, not something new.
  */
 export function AdminSettingsView() {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -41,6 +44,11 @@ export function AdminSettingsView() {
   const [pin, setPin] = useState("");
   const [newUserRoleIds, setNewUserRoleIds] = useState<string[]>([]);
   const [savingUser, setSavingUser] = useState(false);
+
+  const [grantingAdminFor, setGrantingAdminFor] = useState<string | null>(null);
+  const [grantIdentifier, setGrantIdentifier] = useState("");
+  const [grantPassword, setGrantPassword] = useState("");
+  const [grantingBusy, setGrantingBusy] = useState(false);
 
   function loadRoles() {
     getRoles().then(setRoles).catch((e) => setError(e instanceof Error ? e.message : "Could not load roles"));
@@ -122,6 +130,37 @@ export function AdminSettingsView() {
     }
   }
 
+  function startGrantAdmin(userId: string) {
+    setGrantingAdminFor(userId);
+    setGrantIdentifier("");
+    setGrantPassword("");
+    setError(null);
+  }
+
+  async function handleGrantAdmin() {
+    if (!grantingAdminFor || !grantIdentifier.trim() || grantPassword.length < 6) return;
+    setGrantingBusy(true);
+    setError(null);
+    try {
+      await grantAdmin(grantingAdminFor, grantIdentifier.trim(), grantPassword);
+      setGrantingAdminFor(null);
+      loadUsers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not grant admin access");
+    } finally {
+      setGrantingBusy(false);
+    }
+  }
+
+  async function handleRevokeAdmin(user: AdminUser) {
+    try {
+      await revokeAdmin(user.id);
+      loadUsers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not revoke admin access");
+    }
+  }
+
   return (
     <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
       <div style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
@@ -133,27 +172,88 @@ export function AdminSettingsView() {
             <div key={u.id} className="glass-card" style={{ padding: 14, opacity: u.isActive ? 1 : 0.55 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
                     {u.fullName} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>@{u.username}</span>
+                    {u.isAdmin && (
+                      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.3, color: "white", background: "var(--accent)", borderRadius: 6, padding: "2px 6px" }}>
+                        ADMIN
+                      </span>
+                    )}
                   </div>
                   {u.phone && <div className="muted" style={{ fontSize: 11.5 }}>{u.phone}</div>}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => toggleActive(u)}
-                  style={{
-                    padding: "6px 14px",
-                    borderRadius: 10,
-                    border: "1px solid var(--line)",
-                    background: "white",
-                    fontWeight: 700,
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
-                >
-                  {u.isActive ? "Deactivate" : "Activate"}
-                </button>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {u.isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => handleRevokeAdmin(u)}
+                      style={{ padding: "6px 14px", borderRadius: 10, border: "1px solid var(--line)", background: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                    >
+                      Revoke admin
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => startGrantAdmin(u.id)}
+                      style={{ padding: "6px 14px", borderRadius: 10, border: "1px solid var(--line)", background: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                    >
+                      Grant admin
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleActive(u)}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 10,
+                      border: "1px solid var(--line)",
+                      background: "white",
+                      fontWeight: 700,
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {u.isActive ? "Deactivate" : "Activate"}
+                  </button>
+                </div>
               </div>
+
+              {grantingAdminFor === u.id && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8, background: "oklch(97% 0.005 260)", borderRadius: 10, padding: 10 }}>
+                  <div className="muted" style={{ fontSize: 11.5 }}>Email or phone number, and a password for admin sign-in</div>
+                  <input
+                    placeholder="Email or phone"
+                    value={grantIdentifier}
+                    onChange={(e) => setGrantIdentifier(e.target.value)}
+                    style={{ padding: 8, fontSize: 13, borderRadius: 8, border: "1px solid var(--line)" }}
+                  />
+                  <input
+                    type="password"
+                    placeholder="Password (min 6 characters)"
+                    value={grantPassword}
+                    onChange={(e) => setGrantPassword(e.target.value)}
+                    style={{ padding: 8, fontSize: 13, borderRadius: 8, border: "1px solid var(--line)" }}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ flex: 1, padding: "8px 0", fontSize: 12.5 }}
+                      disabled={grantingBusy || !grantIdentifier.trim() || grantPassword.length < 6}
+                      onClick={handleGrantAdmin}
+                    >
+                      {grantingBusy ? "Saving..." : "Confirm"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGrantingAdminFor(null)}
+                      style={{ padding: "8px 14px", fontSize: 12.5, borderRadius: 8, border: "1px solid var(--line)", background: "white", cursor: "pointer" }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
               <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {roles.map((r) => {
                   const has = u.roles.some((ur) => ur.id === r.id);

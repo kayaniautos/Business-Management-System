@@ -3,6 +3,7 @@ export interface LoginResult {
   username: string;
   fullName: string;
   roles: string[];
+  isAdmin: boolean;
 }
 
 export interface PartSearchResult {
@@ -35,6 +36,17 @@ export async function login(username: string, pin: string): Promise<LoginResult>
   });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? "Login failed");
+  return body as LoginResult;
+}
+
+export async function adminLogin(identifier: string, password: string): Promise<LoginResult> {
+  const res = await fetch("/api/auth/admin-login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ identifier, password }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? "Admin login failed");
   return body as LoginResult;
 }
 
@@ -367,6 +379,9 @@ export interface AdminUser {
   fullName: string;
   phone: string | null;
   isActive: boolean;
+  // Email or phone number, used as the admin login identifier.
+  adminIdentifier: string | null;
+  isAdmin: boolean;
   roles: { id: string; name: string }[];
 }
 
@@ -382,6 +397,11 @@ export const createAdminUser = (input: {
 
 export const setUserRoles = (userId: string, roleIds: string[]) =>
   putJson<AdminUser>(`/api/admin/users/${userId}/roles`, { roleIds });
+
+export const grantAdmin = (userId: string, identifier: string, password: string) =>
+  postJson<AdminUser>(`/api/admin/users/${userId}/grant-admin`, { identifier, password });
+export const revokeAdmin = (userId: string) =>
+  postJson<AdminUser>(`/api/admin/users/${userId}/revoke-admin`, {});
 
 export const deactivateUser = (userId: string) =>
   postJson<AdminUser>(`/api/admin/users/${userId}/deactivate`, {});

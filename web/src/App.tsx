@@ -34,11 +34,23 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [user]);
 
+  // Defensive: if admin status is revoked while this screen is open
+  // (e.g. an admin revoking their own access), fall back to POS rather
+  // than leaving a now-hidden view rendered.
+  useEffect(() => {
+    if (user && !user.isAdmin && view === "admin-settings") setView("pos");
+  }, [user, view]);
+
   if (!user) return <LoginView onLoggedIn={setUser} />;
+
+  function handleLogout() {
+    setUser(null);
+    setView("pos");
+  }
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <AppHeader user={user} view={view} onViewChange={setView} />
+      <AppHeader user={user} view={view} onViewChange={setView} onLogout={handleLogout} />
       {view === "pos" && <PosView user={user} />}
       {view === "quotations" && <QuotationView />}
       {view === "delivery-notes" && <DeliveryNoteView />}

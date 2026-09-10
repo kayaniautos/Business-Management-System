@@ -65,10 +65,12 @@ export function AppHeader({
   user,
   view,
   onViewChange,
+  onLogout,
 }: {
   user: LoginResult;
   view: View;
   onViewChange: (v: View) => void;
+  onLogout: () => void;
 }) {
   const [openModule, setOpenModule] = useState<string | null>(null);
   const navRef = useRef<HTMLElement>(null);
@@ -165,13 +167,33 @@ export function AppHeader({
           <button type="button" onClick={() => selectView("parties")} style={tabStyle(view === "parties")}>
             {VIEW_LABELS.parties}
           </button>
-          <button type="button" onClick={() => selectView("admin-settings")} style={tabStyle(view === "admin-settings")}>
-            {VIEW_LABELS["admin-settings"]}
-          </button>
+          {user.isAdmin && (
+            <button type="button" onClick={() => selectView("admin-settings")} style={tabStyle(view === "admin-settings")}>
+              {VIEW_LABELS["admin-settings"]}
+            </button>
+          )}
         </nav>
       </div>
-      <div style={{ fontWeight: 700, fontSize: 13.5 }}>
-        {user.fullName} <span className="muted">&middot; {user.roles.join(", ") || "No role"}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 13.5 }}>
+          {user.fullName} <span className="muted">&middot; {user.roles.join(", ") || "No role"}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onLogout}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 10,
+            border: "1px solid var(--line)",
+            background: "white",
+            fontWeight: 700,
+            fontSize: 12.5,
+            cursor: "pointer",
+            color: "var(--ink-700)",
+          }}
+        >
+          Log out
+        </button>
       </div>
     </div>
   );

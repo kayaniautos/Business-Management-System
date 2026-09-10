@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getStaff, login, type LoginResult, type StaffMember } from "./api.js";
+import { AdminLoginView } from "./AdminLoginView.js";
 
 const MAX_PIN_LENGTH = 6;
 const AVATAR_COLORS = ["#c2410c", "#2563eb", "#047857", "#7c3aed"];
@@ -14,6 +15,7 @@ const AVATAR_COLORS = ["#c2410c", "#2563eb", "#047857", "#7c3aed"];
  * instead of a static mockup.
  */
 export function LoginView({ onLoggedIn }: { onLoggedIn: (user: LoginResult) => void }) {
+  const [mode, setMode] = useState<"staff" | "admin">("staff");
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
   const [staffError, setStaffError] = useState<string | null>(null);
   const [selected, setSelected] = useState<StaffMember | null>(null);
@@ -53,6 +55,10 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: (user: LoginResult) => v
     } finally {
       setLoading(false);
     }
+  }
+
+  if (mode === "admin") {
+    return <AdminLoginView onLoggedIn={onLoggedIn} onBack={() => setMode("staff")} />;
   }
 
   return (
@@ -158,6 +164,13 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: (user: LoginResult) => v
           <span>051-5552489 / 5530887 &middot; 0339-4007532</span>
           <span>kiyantraderstoyotta@gmail.com</span>
         </div>
+        <button
+          type="button"
+          onClick={() => setMode("admin")}
+          style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-500)", fontSize: 12, minHeight: 44 }}
+        >
+          Admin sign in
+        </button>
       </div>
     </div>
   );
