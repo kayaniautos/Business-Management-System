@@ -5,6 +5,90 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-10 — Separate admin login, nav gating, PIN lockout, and logout
+
+**What triggered this:** immediately after the Admin Settings module
+shipped, Mehmoon noticed the tab was visible to every logged-in user
+(a plain Counter Control demo account could see and use it) and
+raised a real concern: a 4-6 digit PIN is guessable, and an
+admin-capable account probably shouldn't rely on one. Separately,
+mid-build, he added that the admin identifier couldn't be email-only,
+since blue-collar staff being granted admin access often have no
+email - and, unrelated, that there's no logout button anywhere.
+
+**Decision on the PIN concern:** did NOT build a stronger PIN, 2FA, or
+any new admin-specific hardening of the PIN flow itself - that's
+exactly the kind of decision CLAUDE.md 5.8 says needs the client's
+Authority Levels conversation first, and the whole app's PIN-based
+login is an already-confirmed design (a local, trusted counter
+device). Instead: (1) gate the Admin Settings tab to `isAdmin` users
+only, and (2) give admin a genuinely SEPARATE credential (email-or-
+phone + password) rather than a variant of the PIN. Both are concrete,
+scoped, and don't touch the confirmed PIN design for regular staff.
+
+**Key design choices:**
+- **`adminPasswordHash` is a separate column from `passwordHash`, not a
+  reuse.** A staff member promoted to admin keeps their PIN untouched -
+  they end up with two independent credentials on one row, used by two
+  separate login endpoints.
+- **The identifier is `adminIdentifier`, explicitly not `email`.**
+  Started as `email` (with a `.email()` Zod validator); renamed and
+  relaxed to accept either an email or a phone number the same day,
+  per Mehmoon's follow-up. Regenerating the migration cleanly (rather
+  than a rename migration) was possible because the `email` migration
+  had not been committed yet - deleted it and the DB columns it had
+  added, then generated fresh.
+- **A separate login SCREEN, not a toggle on the PIN pad.** Reached via
+  an "Admin sign in" link from the staff picker - Ghaus likely isn't
+  counter staff at all and needs his own entry point, not one buried
+  in a picker of people working the counter.
+- **No real credentials for Ghaus were invented.** His actual email/
+  phone and password were never provided. Rather than block on that,
+  seeded one dev-only bootstrap admin (`admin.dev`,
+  `seed-dev-data.ts`) so the feature works today; real deployment
+  grants Ghaus's real account admin access through the UI itself
+  (using the bootstrap account to log in once), then deactivates the
+  bootstrap account. This avoids the chicken-and-egg problem (only an
+  admin can grant admin) without guessing at real business data.
+- **PIN lockout (5 wrong attempts -> 15 minute lock) applies only to
+  the staff PIN endpoint, not admin login** - Mehmoon's own framing
+  treated these as separate concerns (guessable PIN vs. a presumed-
+  stronger admin credential), so lockout wasn't added to admin-login
+  in this pass. Both numbers are inferred defaults, not a client-
+  confirmed policy.
+- **Revoking admin access leaves the identifier and password hash in
+  place** - only the `isAdmin` flag flips off. Re-granting the same
+  person doesn't require re-entering credentials, and there's no
+  security reason to discard a hash nobody can use to log in anyway
+  once `isAdmin` is false.
+- **Logout added opportunistically**, not part of the original ask -
+  noticed while working in this exact area of the app that there was
+  no way to end a session at all. Simple `setUser(null)` in `App.tsx`.
+
+**Known, flagged, not solved:** an admin-only account still gets a PIN
+at creation (schema still requires `passwordHash`), so it still shows
+up in the staff PIN picker even though it's not meant for counter use.
+Making the PIN genuinely optional would ripple through the login and
+staff-list queries for what's a rare case today - flagged rather than
+engineered around.
+
+**Verified end to end through the real UI** (plus curl for the
+lockout and rejection checks): confirmed a plain Counter Control demo
+login has no Admin Settings tab and does have a working Log out
+button; logged in as the seeded bootstrap admin via the new separate
+screen and confirmed the tab then appears; granted admin access to
+the demo user using a phone number (not an email) and confirmed
+admin-login with that phone number succeeds; confirmed the same
+user's ordinary PIN login now also reports `isAdmin: true`; sent 5
+wrong PINs in a row and confirmed the 5th attempt - and the correct
+PIN right after it - both got the lockout message; revoked admin
+access and confirmed both the phone-based admin-login and the
+PIN-login's `isAdmin` flag correctly flipped back.
+
+**Source:** Mehmoon, 2026-09-10.
+
+---
+
 ## 2026-09-10 — Built the Admin Settings / Roles module
 
 **Decision:** Built directly following Mehmoon's own sequencing from the
