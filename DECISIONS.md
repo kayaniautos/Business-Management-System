@@ -5,6 +5,57 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-10 — Merged Deal Parts into the regular POS search results
+
+**What triggered this:** Mehmoon pointed out that a real Deal Part
+("Oil Filter Combo") didn't show up when searching in POS - it only
+ever appeared in a separate "Deal parts:" dropdown, meaning staff had
+two different places to look for the same thing. His framing: a
+bundle "should be shown same like other products," with a "slight
+different color that tells this is a bundle" rather than being kept
+apart entirely.
+
+**Decision:** Merged, not just cross-linked - one search endpoint,
+one result grid, one "Add" button, with a visual-only distinction
+(colored border + a small BUNDLE badge) rather than a functional one.
+
+**Key design choices:**
+- **Opt-in via a query flag (`includeDealParts`), not a global
+  change.** Quotation, DN, and Deal Part's own component-picker search
+  all still call the same `searchParts(q)` they always did, unchanged,
+  and never see a bundle in results - their line schemas still only
+  accept a regular control part (the checkout-only scoping decided
+  when Deal Part was first built). Only `PosView.tsx` opts in. This
+  avoided a real risk: if a bundle appeared in Quotation's search too,
+  a staff member could click "Add" on it there and hit a 400 from the
+  backend, since Quotation's schema doesn't accept `dealPartId` - a
+  confusing dead end this design avoids entirely rather than needing
+  to explain client-side.
+- **One shared result shape**, not a discriminated union - a Deal
+  Part result reuses every field a regular part has (`partNumber:
+  null`, empty fitment, etc.) plus one new `isDealPart: boolean`. This
+  kept the change small: the three screens that don't request Deal
+  Parts needed only a one-line null-safety fix for `partNumber` (now
+  `string | null` in the shared type even though they never actually
+  receive null), not a rewrite.
+- **The old separate dropdown was deleted outright**, not left as a
+  fallback - once search covers it, keeping a second path to the same
+  action would just reintroduce the "two places to look" problem this
+  was meant to fix.
+
+**Verified end to end through the real UI**: searched "oil" in POS and
+confirmed the real "Oil Filter Combo" Deal Part appeared in the same
+results grid as the three regular oil filters, styled with the BUNDLE
+badge and colored border; added it to the cart and completed a real
+checkout; separately searched "oil" in Quotation and confirmed only
+the three regular parts appeared - no bundle, confirming the opt-in
+scoping actually held and didn't leak into the screens that can't
+handle it.
+
+**Source:** Mehmoon, 2026-09-10.
+
+---
+
 ## 2026-09-10 — Wired real stock movements into sales
 
 **Decision:** Built over the other two candidates on the table
