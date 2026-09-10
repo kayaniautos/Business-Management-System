@@ -429,3 +429,88 @@ export const deactivateUser = (userId: string) =>
   postJson<AdminUser>(`/api/admin/users/${userId}/deactivate`, {});
 export const activateUser = (userId: string) =>
   postJson<AdminUser>(`/api/admin/users/${userId}/activate`, {});
+
+export interface PurchaseLine {
+  controlPartId: string;
+  quantity: number;
+  unitCost: number;
+}
+
+export interface PurchaseDocumentResult {
+  id: string;
+  documentNumber: string;
+  subtotalAmount: string;
+  totalAmount: string;
+}
+
+export interface PurchaseDocumentSummary {
+  id: string;
+  documentType: string;
+  documentNumber: string;
+  entityName: string;
+  partyName: string;
+  supplierRef: string | null;
+  documentDate: string;
+  subtotalAmount: string;
+  totalAmount: string;
+  status: string;
+}
+
+export interface PurchaseDocumentDetail extends PurchaseDocumentSummary {
+  partyId: string;
+  lines: {
+    lineNumber: number;
+    controlPartId: string;
+    partNumber: string;
+    catalogName: string;
+    quantity: number;
+    unitCost: string;
+    lineAmount: string;
+  }[];
+}
+
+export type PurchaseDocumentType = "purchase_order" | "goods_receipt" | "purchase_invoice";
+
+export const createPurchaseOrder = (input: {
+  legalEntityId: string;
+  partyId: string;
+  supplierRef?: string;
+  lines: PurchaseLine[];
+}) => postJson<PurchaseDocumentResult>("/api/purchase-orders", input);
+
+export const createGoodsReceipt = (input: {
+  legalEntityId: string;
+  partyId: string;
+  supplierRef?: string;
+  sourcePurchaseOrderId?: string;
+  lines: PurchaseLine[];
+}) => postJson<PurchaseDocumentResult>("/api/goods-receipts", input);
+
+export const createPurchaseInvoice = (input: {
+  legalEntityId: string;
+  partyId: string;
+  supplierRef?: string;
+  sourceGoodsReceiptId: string;
+  lines: PurchaseLine[];
+}) => postJson<PurchaseDocumentResult>("/api/purchase-invoices", input);
+
+export const getPurchaseHistory = (opts?: {
+  legalEntityId?: string;
+  q?: string;
+  documentType?: PurchaseDocumentType;
+}) => {
+  const params = new URLSearchParams();
+  if (opts?.legalEntityId) params.set("legalEntityId", opts.legalEntityId);
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.documentType) params.set("documentType", opts.documentType);
+  const qs = params.toString();
+  return getJson<PurchaseDocumentSummary[]>(`/api/purchases${qs ? `?${qs}` : ""}`);
+};
+
+export const getPurchaseDocument = (id: string) =>
+  getJson<PurchaseDocumentDetail>(`/api/purchases/${id}`);
+
+export const postPurchaseDocument = (id: string) =>
+  postJson<PurchaseDocumentSummary>(`/api/purchases/${id}/post`, {});
+export const unpostPurchaseDocument = (id: string) =>
+  postJson<PurchaseDocumentSummary>(`/api/purchases/${id}/unpost`, {});

@@ -9,6 +9,10 @@ import { DealPartView } from "./DealPartView.js";
 import { PartyView } from "./PartyView.js";
 import { SalesHistoryView } from "./SalesHistoryView.js";
 import { AdminSettingsView } from "./AdminSettingsView.js";
+import { PurchaseOrderView } from "./PurchaseOrderView.js";
+import { GoodsReceiptView } from "./GoodsReceiptView.js";
+import { PurchaseInvoiceView } from "./PurchaseInvoiceView.js";
+import { PurchaseHistoryView } from "./PurchaseHistoryView.js";
 import { AppHeader, type View } from "./AppHeader.js";
 import type { LoginResult } from "./api.js";
 
@@ -60,6 +64,10 @@ export function App() {
       {view === "parties" && <PartyView />}
       {view === "sales-history" && <SalesHistoryView />}
       {view === "admin-settings" && <AdminSettingsView />}
+      {view === "purchase-orders" && <PurchaseOrderView />}
+      {view === "goods-receipts" && <GoodsReceiptView />}
+      {view === "purchase-invoices" && <PurchaseInvoiceView />}
+      {view === "purchase-history" && <PurchaseHistoryView />}
     </div>
   );
 }

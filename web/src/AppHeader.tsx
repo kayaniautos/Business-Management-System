@@ -10,7 +10,11 @@ export type View =
   | "sales-history"
   | "stock-adjustments"
   | "deal-parts"
-  | "admin-settings";
+  | "admin-settings"
+  | "purchase-orders"
+  | "goods-receipts"
+  | "purchase-invoices"
+  | "purchase-history";
 
 const VIEW_LABELS: Record<View, string> = {
   pos: "POS Counter",
@@ -22,6 +26,10 @@ const VIEW_LABELS: Record<View, string> = {
   "stock-adjustments": "Stock Adjustment",
   "deal-parts": "Deal Parts",
   "admin-settings": "Admin Settings",
+  "purchase-orders": "Purchase Orders",
+  "goods-receipts": "Goods Receipts",
+  "purchase-invoices": "Purchase Invoices",
+  "purchase-history": "Purchase History",
 };
 
 /**
@@ -48,6 +56,11 @@ interface NavModule {
 const MODULES: NavModule[] = [
   { key: "sales", label: "Sales", views: ["quotations", "delivery-notes", "sales-history"] },
   { key: "inventory", label: "Inventory", views: ["inventory", "stock-adjustments", "deal-parts"] },
+  {
+    key: "purchasing",
+    label: "Purchasing",
+    views: ["purchase-orders", "goods-receipts", "purchase-invoices", "purchase-history"],
+  },
 ];
 
 const tabStyle = (active: boolean): React.CSSProperties => ({
@@ -98,6 +111,16 @@ export function AppHeader({
         padding: "0 28px",
         background: "oklch(99% 0.004 85 / .6)",
         backdropFilter: "blur(24px)",
+        // The header's own backdrop-filter creates a stacking context with
+        // an implicit z-index of 0, which put it in the SAME paint bucket
+        // as any `.glass-card` in the page content below (glass-card also
+        // uses backdrop-filter) — ties in that bucket resolve by DOM order,
+        // and the header comes first, so it was painting BEHIND page
+        // content. A module dropdown with enough items to extend past the
+        // header (Purchasing's 4 items) then had its lower entries visually
+        // covered and unclickable. An explicit positive z-index here moves
+        // the whole header out of that tie and reliably above all content.
+        zIndex: 30,
         borderBottom: "1px solid var(--line)",
         flexShrink: 0,
       }}
