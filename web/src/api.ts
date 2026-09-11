@@ -283,6 +283,31 @@ export const createParty = (party: {
   phoneNumbers: string[];
 }) => postJson<Party>("/api/parties", party);
 
+export interface PartyLedgerTransaction {
+  id: string;
+  kind: "sale" | "purchase";
+  documentType: string;
+  documentNumber: string;
+  entityName: string;
+  documentDate: string;
+  status: string;
+  totalAmount: string;
+}
+
+export interface PartyLedger {
+  party: Party;
+  transactions: PartyLedgerTransaction[];
+  // Total invoiced (sales) / billed (purchases), posted documents only —
+  // NOT an outstanding balance. No payment/receipt tracking exists yet
+  // (the Vouchers/settlement-channels module isn't built), so this can't
+  // be reduced by what's actually been paid. See parties.ts's own comment
+  // on the /ledger endpoint for the full reasoning.
+  totalInvoiced: string;
+  totalBilled: string;
+}
+
+export const getPartyLedger = (id: string) => getJson<PartyLedger>(`/api/parties/${id}/ledger`);
+
 export interface SalesDocumentSummary {
   id: string;
   documentType: string;
