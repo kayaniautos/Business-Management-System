@@ -5,6 +5,60 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-11 — Make/model typo mitigation: autocomplete + casing normalization, not a curated list
+
+**What triggered this:** immediately after the Car Models screen shipped,
+Mehmoon raised a real concern directly: counter staff are blue-collar and
+typing make/model by hand, so "Sazuki" for "Suzuki" or "Carolla" for
+"Corolla" isn't a hypothetical, it's expected. Asked how to tackle it.
+
+**Decision:** two independent layers, neither a hardcoded/curated list of
+"known" Pakistani-market makes and models:
+1. Frontend `<datalist>` autocomplete on Make/Model, sourced from
+   whatever's already in the database.
+2. Backend case-insensitive reuse of existing casing on save (`POST`/`PUT
+   /api/inventory/car-models`), so "suzuki" and "Suzuki" don't create two
+   near-identical rows.
+
+**Why not a curated list:** it would need someone to define and maintain
+it, and the client's actual market includes used/imported variants that a
+hardcoded list would inevitably miss or fall behind on — the exact kind
+of guess this project's own working agreement says not to make without
+client input. Autocomplete against real, already-entered data instead
+self-reinforces: the first correct spelling becomes the suggestion
+everyone converges on, with zero list-maintenance.
+
+**Why this doesn't fully solve the problem, and that's accepted:**
+autocomplete can't catch the very first typo of a brand-new make (there's
+nothing yet to suggest against), and casing normalization only catches
+case drift, not an actual misspelling like "Sazuki" — that still requires
+a human to notice the datalist suggestion and pick it. Full "did you mean
+Suzuki?" fuzzy-match correction was considered and rejected as more
+engineering for less benefit than plain autocomplete already provides
+here, given how naturally makes/models repeat across a real parts
+business's inventory.
+
+**Self-caught bug**, fixed before this was considered done: the initial
+casing check didn't exclude the row currently being edited, so using Edit
+to deliberately fix a row's own bad casing ("honda" → "Honda") matched
+the row's own pre-update casing during the lookup and silently reverted
+the fix. Caught by testing the edit-to-fix-casing path specifically —
+worth calling out because it's the kind of self-referential bug that's
+easy to miss if you only test the create path.
+
+**Verified via the real API**: confirmed forward normalization
+("suzuki" + existing "Suzuki" → "Suzuki"), confirmed a genuinely new
+make/model is left untouched (nothing to normalize against), reproduced
+the self-match bug on purpose before fixing it, confirmed the fix, and
+confirmed a later duplicate-casing submission normalizes against the
+now-corrected canonical casing. Separately confirmed the `<datalist>`
+on the real Car Models "Add" form is populated from real database values,
+not a static/stale list.
+
+**Source:** Mehmoon, 2026-09-11.
+
+---
+
 ## 2026-09-11 — Built a dedicated Car Models screen, plus fitment-detail fields
 
 **What triggered this:** Mehmoon asked directly whether there was a
