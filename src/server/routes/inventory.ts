@@ -145,24 +145,66 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // --- Car models (for fitment) ---
-  app.get("/car-models", async () => db.query.carModels.findMany({ orderBy: (c, { asc }) => asc(c.make) }));
+  // --- Car models (Vehicles screen, plus fitment picking elsewhere) ---
+  const carModelBodySchema = z.object({
+    make: z.string().min(1).max(100),
+    model: z.string().min(1).max(100),
+    variant: z.string().max(100).optional(),
+    frameEngineName: z.string().max(100).optional(),
+    yearFrom: z.number().int().optional(),
+    yearTo: z.number().int().optional(),
+    engineCapacityCc: z.number().int().positive().optional(),
+    transmission: z.string().max(50).optional(),
+    engineFuel: z.string().max(50).optional(),
+  });
+
+  app.get(
+    "/car-models",
+    { schema: { querystring: z.object({ q: z.string().optional() }) } },
+    async (request) => {
+      const { q } = request.query;
+      return db.query.carModels.findMany({
+        where: q
+          ? (c, { or: orOp, ilike: ilikeOp }) =>
+              orOp(ilikeOp(c.make, `%${q}%`), ilikeOp(c.model, `%${q}%`), ilikeOp(c.variant, `%${q}%`))
+          : undefined,
+        orderBy: (c, { asc }) => [asc(c.make), asc(c.model)],
+      });
+    },
+  );
 
   app.post(
     "/car-models",
-    {
-      schema: {
-        body: z.object({
-          make: z.string().min(1).max(100),
-          model: z.string().min(1).max(100),
-          yearFrom: z.number().int().optional(),
-          yearTo: z.number().int().optional(),
-        }),
-      },
-    },
+    { schema: { body: carModelBodySchema } },
     async (request) => {
       const [row] = await db.insert(carModels).values(request.body).returning();
       return row;
+    },
+  );
+
+  app.put(
+    "/car-models/:id",
+    { schema: { params: z.object({ id: z.string().uuid() }), body: carModelBodySchema } },
+    async (request, reply) => {
+      const [row] = await db
+        .update(carModels)
+        .set(request.body)
+        .where(eq(carModels.id, request.params.id))
+        .returning();
+      if (!row) return reply.code(404).send({ error: "Car model not found" });
+      return row;
+    },
+  );
+
+  app.delete(
+    "/car-models/:id",
+    { schema: { params: z.object({ id: z.string().uuid() }) } },
+    async (request, reply) => {
+      // part_car_models.carModelId is ON DELETE CASCADE, so removing a car
+      // model also removes any fitment links to it — the frontend warns
+      // about this before calling delete, since it's otherwise silent.
+      await db.delete(carModels).where(eq(carModels.id, request.params.id));
+      return reply.code(204).send();
     },
   );
 
