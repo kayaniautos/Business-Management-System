@@ -5,6 +5,65 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-11 — Grouped the Car Models list, dropdowns for transmission/fuel, and a real layout bug fix
+
+**What triggered this:** two separate pieces of direct feedback right
+after the trim-level enrichment shipped: the list was now "too long"
+showing each variant as a separate top-level car, and transmission/fuel
+should be dropdowns, not free text. A third issue came in mid-fix,
+reported directly: scrolling to the bottom of the list and clicking Edit
+required scrolling back up to see the edit form.
+
+**Decision (list length):** group rows by make+model rather than
+inventing pagination or collapsing/hiding rows. A model with only one
+row on file renders exactly as it did before grouping existed; a model
+with several trims shows one header with its variants nested underneath
+as compact sub-rows. Chosen over pagination because the actual complaint
+was redundancy (the same car repeated with no visual link), not raw row
+count — grouping fixes the redundancy directly without hiding any data
+behind a page boundary.
+
+**Decision (dropdowns):** `<select>` for Transmission and Engine Fuel in
+`CarModelsView.tsx`'s form only, with a short fixed option list (Manual/
+Automatic/CVT; Petrol/Diesel/Hybrid/CNG) covering everything already
+seeded plus CNG (common in Pakistan's older/converted fleet). The
+underlying `car_models.transmission`/`engineFuel` columns stay plain
+varchar, not a new database enum — this was a direct instruction about
+this one form's data-entry experience, not a request to lock the schema
+into a value list the client has never confirmed (CLAUDE.md 5.3 still
+flags that as open).
+
+**Real bug found while implementing the above, not something asked
+for:** the reported "have to scroll back up to see the edit form"
+symptom traced to `App.tsx`'s root container using `minHeight: "100vh"`
+instead of `height: "100vh"` + `overflow: "hidden"`. `minHeight` sets a
+floor, not a ceiling — once any view's content grew taller than one
+screen, the root grew with it and the whole page scrolled as one unit,
+so a view's own `flex: 1` list column and its independent
+`overflowY: "auto"` never actually got to scroll on their own the way
+every view's styling already assumed they would. This wasn't specific to
+Car Models — every list-plus-side-panel screen (Sales History, Purchase
+History, Stock Adjustment) had the identical latent bug; trim-level rows
+just made the Car Models list the first one long enough to expose it.
+Fixed by pinning the root to `height: "100vh"` with `overflow: "hidden"`,
+which is what makes each view's own already-correct internal scroll
+regions actually take effect.
+
+**Verified through the real browser**: confirmed a single-variant model
+("Daihatsu Mira," 1 row) still renders as one plain row; confirmed
+multi-variant models ("Toyota Vitz," "Toyota Yaris") each show one
+grouped header with indented sub-rows per trim; scrolled to the literal
+bottom of the list, clicked Edit on the last visible row, and confirmed
+the edit panel appeared at the top of the (separately-scrolling) right
+column with zero scrolling required, its Transmission/Engine Fuel
+dropdowns correctly pre-selected from the stored values; separately
+reloaded POS Counter to confirm the root layout change didn't regress
+an unrelated screen.
+
+**Source:** Mehmoon, 2026-09-11.
+
+---
+
 ## 2026-09-11 — Enriched the starter car makes with real trim/transmission data
 
 **What triggered this:** immediately after the bare make/model starter
