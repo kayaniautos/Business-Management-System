@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createCarModel,
   deleteCarModel,
@@ -34,9 +34,26 @@ const EMPTY_FORM: CarModelInput = {
  * field (e.g. "GLi," "Altis") Mehmoon asked for directly. All five are
  * free text/optional — the client has never confirmed a fixed list of
  * transmission/fuel values, so nothing is coerced into an invented enum.
+ *
+ * Make/Model autocomplete added 2026-09-11: counter staff are
+ * blue-collar and typing by hand, so a real typo ("Sazuki," "Carolla")
+ * is expected, not an edge case (Mehmoon's own examples). The fix is
+ * suggesting from what's already on file as they type — via `<datalist>`,
+ * the simplest native autocomplete, no custom dropdown component needed —
+ * rather than a curated master list, since the client's actual make/model
+ * range (including used/imported variants) isn't something to guess at
+ * and hard-code. This only helps once at least one correct spelling
+ * exists; it doesn't stop the very first typo of a brand-new make. The
+ * backend separately reuses existing casing for an exact case-insensitive
+ * match ("suzuki" -> "Suzuki") — see inventory.ts's own comment for why
+ * that's a narrower, different fix than this one.
  */
 export function CarModelsView() {
   const [carModels, setCarModels] = useState<CarModel[]>([]);
+  // Independent of the (possibly search-filtered) list above — always the
+  // full, unfiltered set, used only to source autocomplete suggestions so
+  // a narrowed search doesn't shrink what's suggestable while typing.
+  const [allCarModels, setAllCarModels] = useState<CarModel[]>([]);
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +67,17 @@ export function CarModelsView() {
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load car models"));
   }
 
-  useEffect(() => load(), []);
+  function loadAll() {
+    getCarModels().then(setAllCarModels).catch(() => {});
+  }
+
+  useEffect(() => {
+    load();
+    loadAll();
+  }, []);
+
+  const knownMakes = useMemo(() => [...new Set(allCarModels.map((c) => c.make))].sort(), [allCarModels]);
+  const knownModels = useMemo(() => [...new Set(allCarModels.map((c) => c.model))].sort(), [allCarModels]);
 
   function startCreate() {
     setEditingId("new");
@@ -114,6 +141,7 @@ export function CarModelsView() {
         const updated = await updateCarModel(editingId, input);
         setCarModels((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
       }
+      loadAll();
       cancelEdit();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save car model");
@@ -128,6 +156,7 @@ export function CarModelsView() {
     try {
       await deleteCarModel(c.id);
       setCarModels((prev) => prev.filter((cm) => cm.id !== c.id));
+      setAllCarModels((prev) => prev.filter((cm) => cm.id !== c.id));
       if (editingId === c.id) cancelEdit();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete car model");
@@ -195,9 +224,15 @@ export function CarModelsView() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <input placeholder="Make (required)" value={form.make} onChange={(e) => field("make", e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />
-            <input placeholder="Model (required)" value={form.model} onChange={(e) => field("model", e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />
+            <input placeholder="Make (required)" list="known-makes" value={form.make} onChange={(e) => field("make", e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />
+            <input placeholder="Model (required)" list="known-models" value={form.model} onChange={(e) => field("model", e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />
           </div>
+          <datalist id="known-makes">
+            {knownMakes.map((m) => <option key={m} value={m} />)}
+          </datalist>
+          <datalist id="known-models">
+            {knownModels.map((m) => <option key={m} value={m} />)}
+          </datalist>
 
           <input placeholder="Variant (e.g. GLi, Altis)" value={form.variant ?? ""} onChange={(e) => field("variant", e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />
           <input placeholder="Frame / engine name" value={form.frameEngineName ?? ""} onChange={(e) => field("frameEngineName", e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />

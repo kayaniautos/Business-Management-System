@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   attachFitment,
   carModelLabel,
@@ -45,6 +45,16 @@ export function InventoryView() {
     getMarkers().then(setMarkers).catch((e) => setError(String(e)));
     getCarModels().then(setCarModels).catch(() => {});
   }, []);
+
+  // Autocomplete source for the "or new:" Make/Model inputs below — blue-
+  // collar counter staff typing by hand will genuinely misspell "Suzuki"
+  // as "Sazuki" (Mehmoon's own example, 2026-09-11); suggesting from what
+  // car models already exist reduces that without maintaining a curated
+  // master list. See CarModelsView.tsx's own comment for the fuller
+  // reasoning, and inventory.ts for the separate backend fix (reusing
+  // existing casing on an exact case-insensitive match).
+  const knownMakes = useMemo(() => [...new Set(carModels.map((c) => c.make))].sort(), [carModels]);
+  const knownModels = useMemo(() => [...new Set(carModels.map((c) => c.model))].sort(), [carModels]);
 
   useEffect(() => {
     if (!selectedMarkerId) {
@@ -225,11 +235,17 @@ export function InventoryView() {
                       ))}
                     </select>
                     <span className="muted" style={{ fontSize: 11 }}>or new:</span>
-                    <input placeholder="Make" value={newCarMake} onChange={(e) => setNewCarMake(e.target.value)} style={{ width: 80, padding: 6, fontSize: 12 }} />
-                    <input placeholder="Model" value={newCarModelName} onChange={(e) => setNewCarModelName(e.target.value)} style={{ width: 80, padding: 6, fontSize: 12 }} />
+                    <input placeholder="Make" list="known-makes" value={newCarMake} onChange={(e) => setNewCarMake(e.target.value)} style={{ width: 80, padding: 6, fontSize: 12 }} />
+                    <input placeholder="Model" list="known-models" value={newCarModelName} onChange={(e) => setNewCarModelName(e.target.value)} style={{ width: 80, padding: 6, fontSize: 12 }} />
                     <input placeholder="Year from" type="number" value={newCarYearFrom} onChange={(e) => setNewCarYearFrom(e.target.value)} style={{ width: 80, padding: 6, fontSize: 12 }} />
                     <input placeholder="Year to" type="number" value={newCarYearTo} onChange={(e) => setNewCarYearTo(e.target.value)} style={{ width: 80, padding: 6, fontSize: 12 }} />
                     <button type="button" onClick={() => handleAddFitment(cp.id)} style={{ padding: "4px 10px", cursor: "pointer" }}>Add</button>
+                    <datalist id="known-makes">
+                      {knownMakes.map((m) => <option key={m} value={m} />)}
+                    </datalist>
+                    <datalist id="known-models">
+                      {knownModels.map((m) => <option key={m} value={m} />)}
+                    </datalist>
                   </div>
                 )}
               </div>
