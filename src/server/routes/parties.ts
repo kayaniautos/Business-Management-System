@@ -1,9 +1,15 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
-import { parties, partyPhoneNumbers } from "../../db/schema/index.js";
+import {
+  parties,
+  partyPhoneNumbers,
+  salesDocuments,
+  purchaseDocuments,
+  legalEntities,
+} from "../../db/schema/index.js";
 
 const partyStatusSchema = z.enum(["C1", "C2", "C3"]);
 const partyNatureSchema = z.enum(["S1", "S2", "S3"]);
@@ -117,6 +123,125 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
           phoneNumbers,
         };
       });
+    },
+  );
+
+  /**
+   * Party ledger/statement — first screen showing a party's transaction
+   * history, combining both sides regardless of the party's own Nature
+   * (S1/S2/S3): nothing at the database level stops a sales_documents or
+   * purchase_documents row from referencing any party, so this reads both
+   * tables rather than trusting Nature to predict which one has data.
+   *
+   * `totalInvoiced`/`totalBilled` are deliberately NOT called an
+   * "outstanding balance" anywhere in this response or the screen that
+   * renders it — CLAUDE.md 5.10's "settled invoice-wise" language implies
+   * a real balance concept, but computing one needs payment/receipt
+   * records (the Vouchers/settlement-channels module, not built yet).
+   * These totals are simply the sum of posted amounts on the one document
+   * type that represents a real financial commitment on each side — an
+   * Invoice for sales, a Purchase Invoice for purchases — not a DN,
+   * Quotation, Purchase Order, or Goods Receipt, none of which are
+   * themselves a bill. If nothing has been paid yet, this number happens
+   * to equal the true outstanding balance; once real payments exist
+   * anywhere in the system, it will not, and must not be presented as if
+   * it still were.
+   */
+  const ledgerTransactionSchema = z.object({
+    id: z.string(),
+    kind: z.enum(["sale", "purchase"]),
+    documentType: z.string(),
+    documentNumber: z.string(),
+    entityName: z.string(),
+    documentDate: z.string(),
+    status: z.string(),
+    totalAmount: z.string(),
+  });
+
+  app.get(
+    "/:id/ledger",
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        response: {
+          200: z.object({
+            party: partyResponseSchema,
+            transactions: z.array(ledgerTransactionSchema),
+            totalInvoiced: z.string(),
+            totalBilled: z.string(),
+          }),
+          404: z.object({ error: z.string() }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const party = await db.query.parties.findFirst({ where: eq(parties.id, id) });
+      if (!party) return reply.code(404).send({ error: "Party not found" });
+
+      const phoneRows = await db
+        .select({ phoneNumber: partyPhoneNumbers.phoneNumber })
+        .from(partyPhoneNumbers)
+        .where(eq(partyPhoneNumbers.partyId, id));
+
+      const saleRows = await db
+        .select({
+          id: salesDocuments.id,
+          documentType: salesDocuments.documentType,
+          documentNumber: salesDocuments.documentNumber,
+          entityName: legalEntities.name,
+          documentDate: salesDocuments.documentDate,
+          status: salesDocuments.status,
+          totalAmount: salesDocuments.totalAmount,
+        })
+        .from(salesDocuments)
+        .innerJoin(legalEntities, eq(salesDocuments.legalEntityId, legalEntities.id))
+        .where(eq(salesDocuments.partyId, id));
+
+      const purchaseRows = await db
+        .select({
+          id: purchaseDocuments.id,
+          documentType: purchaseDocuments.documentType,
+          documentNumber: purchaseDocuments.documentNumber,
+          entityName: legalEntities.name,
+          documentDate: purchaseDocuments.documentDate,
+          status: purchaseDocuments.status,
+          totalAmount: purchaseDocuments.totalAmount,
+        })
+        .from(purchaseDocuments)
+        .innerJoin(legalEntities, eq(purchaseDocuments.legalEntityId, legalEntities.id))
+        .where(eq(purchaseDocuments.partyId, id));
+
+      const transactions = [
+        ...saleRows.map((r) => ({ ...r, kind: "sale" as const })),
+        ...purchaseRows.map((r) => ({ ...r, kind: "purchase" as const })),
+      ].sort((a, b) => (a.documentDate < b.documentDate ? 1 : a.documentDate > b.documentDate ? -1 : 0));
+
+      const [invoicedRow] = await db
+        .select({ total: sql<string>`coalesce(sum(${salesDocuments.totalAmount}), 0)` })
+        .from(salesDocuments)
+        .where(and(eq(salesDocuments.partyId, id), eq(salesDocuments.documentType, "invoice"), eq(salesDocuments.status, "posted")));
+
+      const [billedRow] = await db
+        .select({ total: sql<string>`coalesce(sum(${purchaseDocuments.totalAmount}), 0)` })
+        .from(purchaseDocuments)
+        .where(and(eq(purchaseDocuments.partyId, id), eq(purchaseDocuments.documentType, "purchase_invoice"), eq(purchaseDocuments.status, "posted")));
+
+      return {
+        party: {
+          id: party.id,
+          name: party.name,
+          printName: party.printName,
+          gstNo: party.gstNo,
+          ntnNo: party.ntnNo,
+          status: party.status,
+          nature: party.nature,
+          phoneNumbers: phoneRows.map((r) => r.phoneNumber),
+        },
+        transactions,
+        totalInvoiced: invoicedRow?.total ?? "0",
+        totalBilled: billedRow?.total ?? "0",
+      };
     },
   );
 };
