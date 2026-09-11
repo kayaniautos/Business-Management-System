@@ -5,6 +5,69 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-11 — Enriched the starter car makes with real trim/transmission data
+
+**What triggered this:** immediately after the bare make/model starter
+list shipped, Mehmoon pointed out it wasn't actually representative —
+cars in Pakistan are described and sold by trim ("Corolla GLi," "Civic
+VTi Oriel"), not by bare model name, and asked for transmission too.
+
+**Decision:** rewrite the starter list so the volume models people
+actually search fitment by (Suzuki/Toyota/Honda/Daihatsu) get real,
+well-known trim-level rows with transmission and fuel filled in, while
+the lower-volume newer imports (Hyundai/KIA/Changan/MG/Nissan) get
+transmission/fuel filled in but no invented trim name — Pakistan's
+grey-import market for those isn't standardized enough to guess at
+confidently, and a wrong invented trim is worse than none.
+
+**Key design change — matching key became (make, model, variant), not
+just (make, model):** the original script matched on make+model alone,
+so it couldn't tell "bare Corolla" from "Corolla GLi" and would have
+either skipped every new trim row (false match) or endlessly duplicated
+existing bare rows (false miss). Matching now treats a null variant as
+only matching another null variant, so a trim-specific row and a bare
+row for the same model coexist correctly without colliding.
+
+**Key design change — fill-missing instead of insert-or-skip:** for a
+model that doesn't get trim-level rows (e.g. Hiace, or the newer
+imports), the enrichment still needed to land somehow. Rather than
+leaving those bare rows untouched forever, the script now checks each
+match's existing `transmission`/`engineFuel` and fills them in ONLY if
+still null — never overwriting a value staff or an earlier run already
+set. This is what let the pre-existing bare rows (including the two that
+predate this feature entirely, `Suzuki Bolan`/`Ravi`, and the eleven
+import rows) pick up real transmission/fuel data without a destructive
+rewrite.
+
+**One-time manual cleanup, not baked into the script:** 15 bare rows the
+first seed run had created minutes earlier (Corolla, Civic, City, Alto,
+Cultus, Wagon R, Swift, Vitz, Prius, Hilux, Fortuner, Yaris, BR-V, Mira,
+Cuore) were superseded by trim-level rows and manually deleted via the
+real DELETE endpoint before re-running the seed — confirmed safe first,
+since they were created by this same session moments earlier with
+nothing yet able to reference them. Deliberately NOT done for `Suzuki
+Mehran` (dev-seed data that predates this feature and IS fitment-linked
+to a real seeded part, "Oil Filter - Standard") — its bare row was left
+completely untouched, and two new variant rows (VX, VXR) were added
+alongside it instead of touching or replacing it. This is exactly why
+the matching key treats variant-null and variant-set rows as distinct:
+it made "add alongside, never replace" the natural, safe behavior for
+any row a script can't prove is unreferenced, without needing dependency-
+checking logic baked into the script itself.
+
+**Verified**: ran the enriched seed and confirmed 39 new rows inserted
+and 14 existing bare rows had their transmission/fuel filled in; ran it
+a second time and confirmed zero changes (true idempotency); confirmed
+via the real API that `Suzuki Mehran`'s original bare row and its
+fitment link to "Oil Filter - Standard" were completely undisturbed;
+confirmed through the real browser that searching "Civic" now shows
+three distinct, correctly-labeled rows (VTi/Manual/Petrol, VTi
+Oriel/Automatic/Petrol, RS Turbo/Automatic/Petrol).
+
+**Source:** Mehmoon, 2026-09-11.
+
+---
+
 ## 2026-09-11 — Seeded starter car makes/models, in their own script
 
 **What triggered this:** immediately after shipping autocomplete +
