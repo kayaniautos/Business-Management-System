@@ -5,6 +5,69 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-11 — Built a Party ledger/statement view, explicitly not calling it a "balance"
+
+**What triggered this:** presented as one of four next-feature options
+(alternatives: settlement channels, supplier returns, a margin alert)
+after the Car Models work wrapped up, and picked as the recommended one
+— it needed no new business rules, purely surfacing data that already
+existed once Purchasing gave every party a real transaction history on
+both the sales and purchase side.
+
+**Decision:** a read-only statement per party — every sales and purchase
+document tied to them, plus two totals — surfaced as a second mode of
+the existing `PartyView.tsx` right-hand panel (a "Statement" button per
+row), not a new screen or nav entry.
+
+**Key design choice — read BOTH sales and purchase documents,
+regardless of the party's own Nature.** Nature (S1/S2/S3) is an
+application-layer convention steering which pickers show which parties,
+not a database constraint — nothing stops a purchase document from
+referencing a Nature-S3 party or vice versa. A statement that only
+looked at "the expected side" based on Nature could silently omit real
+transactions. Reading both and merging them is more work but is
+actually correct regardless of how a party happens to be classified.
+
+**Key design choice — never call the totals a "balance."** CLAUDE.md
+5.10 mentions corporate customers being "settled invoice-wise," which
+implies a real running-balance concept exists in the client's own mental
+model. But an accurate balance needs to subtract actual payments
+received/made, and no payment or receipt record exists anywhere in this
+system yet (Vouchers/settlement channels, Phase 4, not built). Showing a
+number labeled "balance" that's actually just "everything ever billed,
+with zero payments ever subtracted" would be actively misleading the
+moment a single payment happens in real life. The totals are computed
+only from the ONE document type that represents an actual financial
+commitment per side (Invoice / Purchase Invoice, posted only — not a
+Quotation, DN, PO, or Goods Receipt, none of which are themselves a
+bill), and the screen says outright, in the client-facing copy itself,
+"Not a payment-adjusted balance — no receipts/payments are tracked yet."
+This is the same "don't build on an unconfirmed concept" instinct
+already applied elsewhere in this project (e.g. never inventing a SAP
+field, section 5.7) — just applied to a UI-copy question here rather
+than a schema one.
+
+**Key design choice — a panel mode, not a new screen.** The right panel
+in `PartyView.tsx` already exists and is squarely about one party; a
+statement is the same category of thing as the "New party" form it
+temporarily replaces (view vs. create), so toggling between them in the
+same panel avoided both a new nav entry (the nav bar is already fairly
+busy) and a redundant third column.
+
+**Verified**: via the real API, confirmed a real supplier
+("Metro Parts Supplier," used throughout the earlier Purchasing testing)
+shows all 5 of its actual purchase documents with the total correctly
+counting only its one posted Purchase Invoice (Rs 1820), and a real
+customer ("Faisal Motors") shows its one posted Invoice (Rs 600) as
+total invoiced; through the real browser, opened the statement, scrolled
+its own independently-scrolling region to see the full transaction list,
+and confirmed closing it correctly returns to the "New party" form.
+
+**Source:** Mehmoon, 2026-09-11 (picked from a presented list of
+next-feature options).
+
+---
+
 ## 2026-09-11 — Grouped the Car Models list, dropdowns for transmission/fuel, and a real layout bug fix
 
 **What triggered this:** two separate pieces of direct feedback right
