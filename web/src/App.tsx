@@ -54,7 +54,7 @@ export function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <AppHeader user={user} view={view} onViewChange={setView} onLogout={handleLogout} />
       {view === "pos" && <PosView user={user} />}
       {view === "quotations" && <QuotationView />}
