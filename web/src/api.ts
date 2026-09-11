@@ -290,6 +290,9 @@ export interface SalesDocumentDetail extends SalesDocumentSummary {
     lineGrossAmount: string;
   }[];
   discounts: { label: string; amount: string }[];
+  // LIFO-derived cost of goods sold, document-level total (CLAUDE.md "LIFO
+  // must be deliberate"). "0.00" for a Quotation or a document not posted.
+  cogsAmount: string;
 }
 
 export type SalesDocumentType = "quotation" | "delivery_note" | "invoice";
@@ -353,7 +356,7 @@ export interface StockAdjustmentResult extends StockAdjustment {
 }
 
 export const getPartQuantity = (controlPartId: string) =>
-  getJson<{ controlPartId: string; quantity: number }>(
+  getJson<{ controlPartId: string; quantity: number; currentUnitCost: string | null }>(
     `/api/stock-adjustments/quantity/${controlPartId}`,
   );
 

@@ -193,6 +193,19 @@ export function SalesHistoryView() {
             <span>Total</span>
             <span>Rs {selected.totalAmount}</span>
           </div>
+
+          {selected.status === "posted" && selected.documentType !== "quotation" && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span className="muted">Cost of goods sold (LIFO)</span>
+                <span>Rs {selected.cogsAmount}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span className="muted">Gross margin</span>
+                <span style={{ fontWeight: 700 }}>Rs {(Number(selected.totalAmount) - Number(selected.cogsAmount)).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

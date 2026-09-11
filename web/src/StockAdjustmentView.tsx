@@ -26,6 +26,7 @@ export function StockAdjustmentView() {
 
   const [selected, setSelected] = useState<PartSearchResult | null>(null);
   const [currentQty, setCurrentQty] = useState<number | null>(null);
+  const [currentUnitCost, setCurrentUnitCost] = useState<string | null>(null);
   const [delta, setDelta] = useState("");
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
@@ -57,10 +58,12 @@ export function StockAdjustmentView() {
     setDelta("");
     setComment("");
     try {
-      const { quantity } = await getPartQuantity(part.id);
+      const { quantity, currentUnitCost: unitCost } = await getPartQuantity(part.id);
       setCurrentQty(quantity);
+      setCurrentUnitCost(unitCost);
     } catch {
       setCurrentQty(null);
+      setCurrentUnitCost(null);
     }
   }
 
@@ -162,6 +165,13 @@ export function StockAdjustmentView() {
               <span className="muted">Current quantity</span>
               <span style={{ fontWeight: 800 }}>{currentQty ?? "..."}</span>
             </div>
+
+            {currentUnitCost !== null && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                <span className="muted">Last received cost (LIFO)</span>
+                <span style={{ fontWeight: 700 }}>Rs {currentUnitCost}</span>
+              </div>
+            )}
 
             <label className="muted" style={{ fontSize: 12 }}>
               Adjustment (+/-)
