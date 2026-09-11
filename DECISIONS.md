@@ -5,6 +5,51 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-11 — Seeded starter car makes/models, in their own script
+
+**What triggered this:** immediately after shipping autocomplete +
+casing normalization for make/model typos, the obvious remaining gap was
+called out directly: autocomplete only helps once a correct spelling
+already exists — the very first "Suzuki" still has to be typed correctly
+by someone. Asked to seed a few known Pakistani makes to close that.
+
+**Decision:** a small (30 rows, 9 makes) starter list of common
+Pakistani-market vehicles, in a brand-new `seed-car-makes.ts` script —
+not added to `seed.ts`.
+
+**Why not `seed.ts`:** that file's own header comment is explicit —
+it seeds "only what's literally confirmed in CLAUDE.md." Every row in it
+traces to something the client actually said (the chart of accounts, the
+two legal entities, the five roles). A list of "well-known Pakistani car
+makes" is my own judgment call, not a client-confirmed fact — mixing the
+two would blur a distinction this file has held since it was written,
+and the next person reading `seed.ts` should be able to trust that
+everything in it is genuinely client-sourced.
+
+**Why not `seed-dev-data.ts` either:** that file is documented elsewhere
+(CLAUDE.md's own build log) as throwaway dev/testing sample data — a
+demo login, two sample oil filters — explicitly "never confirmed
+business data" and not meant to represent anything real. This list is
+the opposite: it's meant to be genuinely useful in a real deployment,
+not cleared out before go-live.
+
+**Why idempotent, checking case-insensitively:** by the time this runs
+in any real environment, staff may have already entered some of these
+makes themselves (correctly or not) through the app. A blind insert
+would either fail or create duplicates; checking existing (make, model)
+pairs case-insensitively before inserting means the script only ever
+fills genuine gaps and is safe to run more than once.
+
+**Verified**: ran against the real local database — added 28 of the 30
+listed rows (2 already existed from earlier testing), ran a second time
+and confirmed zero rows were added, and confirmed through the real
+browser that both the Car Models list and the Make/Model autocomplete
+immediately reflected the full set.
+
+**Source:** Mehmoon, 2026-09-11.
+
+---
+
 ## 2026-09-11 — Make/model typo mitigation: autocomplete + casing normalization, not a curated list
 
 **What triggered this:** immediately after the Car Models screen shipped,
