@@ -156,8 +156,25 @@ export interface CarModel {
   id: string;
   make: string;
   model: string;
+  variant: string | null;
+  frameEngineName: string | null;
   yearFrom: number | null;
   yearTo: number | null;
+  engineCapacityCc: number | null;
+  transmission: string | null;
+  engineFuel: string | null;
+}
+
+export interface CarModelInput {
+  make: string;
+  model: string;
+  variant?: string;
+  frameEngineName?: string;
+  yearFrom?: number;
+  yearTo?: number;
+  engineCapacityCc?: number;
+  transmission?: string;
+  engineFuel?: string;
 }
 
 // Shared label formatter — used by both the Inventory fitment picker and
@@ -168,9 +185,10 @@ export interface CarModel {
 // into the label itself rather than a separate year field the staff has
 // to reconcile against.
 export function carModelLabel(c: CarModel): string {
-  if (c.yearFrom && c.yearTo) return `${c.model} (${c.yearFrom}-${c.yearTo})`;
-  if (c.yearFrom) return `${c.model} (${c.yearFrom}+)`;
-  return c.model;
+  const name = c.variant ? `${c.model} ${c.variant}` : c.model;
+  if (c.yearFrom && c.yearTo) return `${name} (${c.yearFrom}-${c.yearTo})`;
+  if (c.yearFrom) return `${name} (${c.yearFrom}+)`;
+  return name;
 }
 
 export const getMarkers = () => getJson<Marker[]>("/api/inventory/markers");
@@ -197,9 +215,16 @@ export const createControlPart = (
     parentControlPartId,
   });
 
-export const getCarModels = () => getJson<CarModel[]>("/api/inventory/car-models");
-export const createCarModel = (make: string, model: string, yearFrom?: number, yearTo?: number) =>
-  postJson<CarModel>("/api/inventory/car-models", { make, model, yearFrom, yearTo });
+export const getCarModels = (q?: string) =>
+  getJson<CarModel[]>(`/api/inventory/car-models${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+export const createCarModel = (input: CarModelInput) =>
+  postJson<CarModel>("/api/inventory/car-models", input);
+export const updateCarModel = (id: string, input: CarModelInput) =>
+  putJson<CarModel>(`/api/inventory/car-models/${id}`, input);
+export async function deleteCarModel(id: string): Promise<void> {
+  const res = await fetch(`/api/inventory/car-models/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Could not delete car model");
+}
 
 export const attachFitment = (controlPartId: string, carModelId: string) =>
   postJson<null>(`/api/inventory/control-parts/${controlPartId}/fitment`, { carModelId });

@@ -107,12 +107,12 @@ export function InventoryView() {
     try {
       let carModelId = fitmentCarModelId;
       if (!carModelId && newCarMake.trim() && newCarModelName.trim()) {
-        const created = await createCarModel(
-          newCarMake.trim(),
-          newCarModelName.trim(),
-          newCarYearFrom ? Number(newCarYearFrom) : undefined,
-          newCarYearTo ? Number(newCarYearTo) : undefined,
-        );
+        const created = await createCarModel({
+          make: newCarMake.trim(),
+          model: newCarModelName.trim(),
+          yearFrom: newCarYearFrom ? Number(newCarYearFrom) : undefined,
+          yearTo: newCarYearTo ? Number(newCarYearTo) : undefined,
+        });
         setCarModels((prev) => [...prev, created]);
         carModelId = created.id;
       }
