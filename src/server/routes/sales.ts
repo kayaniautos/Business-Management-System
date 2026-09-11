@@ -11,6 +11,8 @@ import {
   controlParts,
   dealParts,
   parties,
+  stockMovements,
+  stockLayerConsumptions,
 } from "../../db/schema/index.js";
 import { assignDocumentNumber } from "../services/document-numbers.js";
 import {
@@ -107,6 +109,14 @@ const salesDocumentDetailSchema = salesDocumentSummarySchema.extend({
     }),
   ),
   discounts: z.array(z.object({ label: z.string(), amount: z.string() })),
+  // Total LIFO-derived cost of goods sold for this document (CLAUDE.md
+  // "LIFO must be deliberate" / chart-of-accounts "Cost of Goods Sold net
+  // of returns (LIFO basis)"), summed across every line — document-level
+  // only in this pass, not broken out per line (services/lifo-cost-
+  // layers.ts). "0.00" for a Quotation (never touches the stock ledger)
+  // or a document that hasn't been posted yet. Understated, not wrong,
+  // for any part sold before a cost layer existed for it.
+  cogsAmount: z.string(),
 });
 
 /**
@@ -239,7 +249,13 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
         .from(salesDocumentDiscounts)
         .where(eq(salesDocumentDiscounts.salesDocumentId, id));
 
-      return { ...header, lines: lineRows, discounts: discountRows };
+      const [cogsRow] = await db
+        .select({ total: sql<string>`coalesce(sum(${stockLayerConsumptions.quantityConsumed} * ${stockLayerConsumptions.unitCost}), 0)` })
+        .from(stockMovements)
+        .innerJoin(stockLayerConsumptions, eq(stockLayerConsumptions.stockMovementId, stockMovements.id))
+        .where(and(eq(stockMovements.salesDocumentId, id), eq(stockMovements.movementType, "sale")));
+
+      return { ...header, lines: lineRows, discounts: discountRows, cogsAmount: cogsRow?.total ?? "0" };
     },
   );
 

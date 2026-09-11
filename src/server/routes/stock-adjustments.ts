@@ -1,16 +1,33 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
-import { controlParts, stockMovements } from "../../db/schema/index.js";
+import { controlParts, stockCostLayers, stockMovements } from "../../db/schema/index.js";
 
 const errorResponseSchema = z.object({ error: z.string() });
 
 const quantityResponseSchema = z.object({
   controlPartId: z.string(),
   quantity: z.number(),
+  // The unit cost of the LIFO layer that would be consumed NEXT (the
+  // most recently received batch still holding stock) — not an average
+  // cost. Null when no cost layer exists yet for this part (nothing has
+  // ever been received through Goods Receipt, CLAUDE.md section 7/9's
+  // Purchasing entry) — a real, expected state for parts whose stock
+  // predates that feature or came in only through a Stock Adjustment.
+  currentUnitCost: z.string().nullable(),
 });
+
+async function currentLifoUnitCost(controlPartId: string): Promise<string | null> {
+  const [layer] = await db
+    .select({ unitCost: stockCostLayers.unitCost })
+    .from(stockCostLayers)
+    .where(and(eq(stockCostLayers.controlPartId, controlPartId), gt(stockCostLayers.quantityRemaining, 0)))
+    .orderBy(desc(stockCostLayers.id))
+    .limit(1);
+  return layer?.unitCost ?? null;
+}
 
 const adjustmentResponseSchema = z.object({
   id: z.string(),
@@ -83,7 +100,11 @@ export const stockAdjustmentsRoutes: FastifyPluginAsync = async (fastify) => {
       });
       if (!part) return reply.code(404).send({ error: "Part not found" });
 
-      return { controlPartId, quantity: await currentQuantity(controlPartId) };
+      return {
+        controlPartId,
+        quantity: await currentQuantity(controlPartId),
+        currentUnitCost: await currentLifoUnitCost(controlPartId),
+      };
     },
   );
 

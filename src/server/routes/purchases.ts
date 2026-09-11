@@ -11,6 +11,7 @@ import {
   parties,
 } from "../../db/schema/index.js";
 import { applyStockMovementsForPurchaseDocument } from "../services/purchase-stock-movements.js";
+import { applyCostLayersForPurchaseDocument } from "../services/lifo-cost-layers.js";
 
 const purchaseDocumentSummarySchema = z.object({
   id: z.string(),
@@ -200,6 +201,7 @@ export const purchasesRoutes: FastifyPluginAsync = async (fastify) => {
           .set({ status: "posted", postedAt: new Date() })
           .where(eq(purchaseDocuments.id, doc.id));
         await applyStockMovementsForPurchaseDocument(tx, doc.id, 1);
+        await applyCostLayersForPurchaseDocument(tx, doc.id, 1);
       });
       return summarizeDocument(doc.id);
     },
@@ -220,6 +222,7 @@ export const purchasesRoutes: FastifyPluginAsync = async (fastify) => {
       await db.transaction(async (tx) => {
         await tx.update(purchaseDocuments).set({ status: "unposted" }).where(eq(purchaseDocuments.id, doc.id));
         await applyStockMovementsForPurchaseDocument(tx, doc.id, -1);
+        await applyCostLayersForPurchaseDocument(tx, doc.id, -1);
       });
       return summarizeDocument(doc.id);
     },

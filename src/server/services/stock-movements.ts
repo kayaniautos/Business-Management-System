@@ -1,6 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { salesDocumentLines, dealPartComponents, stockMovements } from "../../db/schema/index.js";
+import { consumeLifoForSaleMovement, reverseLifoForSalesDocument } from "./lifo-cost-layers.js";
 
 // Same DbOrTx pattern as document-numbers.ts — accepts either the
 // top-level db handle or a transaction handle from db.transaction().
@@ -70,12 +71,30 @@ export async function applyStockMovementsForDocument(
 
   if (movementRows.length === 0) return;
 
-  await client.insert(stockMovements).values(
-    movementRows.map((m) => ({
-      controlPartId: m.controlPartId,
-      movementType: "sale" as const,
-      quantityDelta: m.quantityDelta,
-      salesDocumentId,
-    })),
-  );
+  const inserted = await client
+    .insert(stockMovements)
+    .values(
+      movementRows.map((m) => ({
+        controlPartId: m.controlPartId,
+        movementType: "sale" as const,
+        quantityDelta: m.quantityDelta,
+        salesDocumentId,
+      })),
+    )
+    .returning({ id: stockMovements.id, controlPartId: stockMovements.controlPartId, quantityDelta: stockMovements.quantityDelta });
+
+  // LIFO cost-layer bookkeeping (CLAUDE.md "LIFO must be deliberate"), on
+  // top of the quantity ledger above, not instead of it. A decrement
+  // (direction -1) consumes layers fresh for the rows just inserted; a
+  // reversal (direction +1, unposting) doesn't consume anything itself —
+  // it restores whatever the document's ORIGINAL decrement rows consumed.
+  // See services/lifo-cost-layers.ts for why reversal looks at the whole
+  // document rather than just these new rows.
+  if (direction === -1) {
+    for (const row of inserted) {
+      await consumeLifoForSaleMovement(client, row.id, row.controlPartId, Math.abs(row.quantityDelta));
+    }
+  } else {
+    await reverseLifoForSalesDocument(client, salesDocumentId);
+  }
 }
