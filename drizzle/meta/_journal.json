@@ -71,6 +71,13 @@
       "when": 1789125157534,
       "tag": "0009_lush_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789128597912,
+      "tag": "0010_glorious_sprite",
+      "breakpoints": true
     }
   ]
 }
