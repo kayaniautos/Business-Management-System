@@ -20,6 +20,16 @@ const EMPTY_FORM: CarModelInput = {
   engineFuel: "",
 };
 
+// Fixed dropdown choices (Mehmoon's direction, 2026-09-11) — the column
+// itself stays free text at the schema/API level (CLAUDE.md 5.3: the
+// client has never confirmed a closed list), this is purely a data-entry
+// constraint in this one form so staff pick from a short, consistent set
+// instead of typing free text that can drift ("Auto" vs "Automatic").
+// Covers every value already seeded (seed-car-makes.ts) plus CNG, common
+// in Pakistan's older/converted fleet.
+const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "CVT"];
+const FUEL_OPTIONS = ["Petrol", "Diesel", "Hybrid", "CNG"];
+
 /**
  * First dedicated Car Models screen (Mehmoon's direction, 2026-09-11) —
  * until now a car_models row could only ever be created inline, one at a
@@ -31,9 +41,20 @@ const EMPTY_FORM: CarModelInput = {
  * Also closes the gap CLAUDE.md 5.3 flagged: the Control Part Form's
  * fitment-line fields ("Frame/Engine name, Engine capacity/CC,
  * Transmission, Engine Fuel") now have real columns, plus a `variant`
- * field (e.g. "GLi," "Altis") Mehmoon asked for directly. All five are
- * free text/optional — the client has never confirmed a fixed list of
- * transmission/fuel values, so nothing is coerced into an invented enum.
+ * field (e.g. "GLi," "Altis") Mehmoon asked for directly. Variant and
+ * frame/engine name stay free text (no confirmed closed list exists for
+ * either); transmission and fuel are dropdowns in THIS form only
+ * (`TRANSMISSION_OPTIONS`/`FUEL_OPTIONS` below) — the column itself is
+ * still plain varchar at the schema/API level, so this is a data-entry
+ * constraint, not a schema commitment to an enum the client hasn't
+ * confirmed.
+ *
+ * List grouped by make+model, same day: once trim-level rows existed
+ * (Corolla XLI/GLI/Altis/Grande, etc. — see the seed-car-makes.ts build
+ * log entry), a flat list showed the same car four separate times with
+ * no visual link between them. A model with only one row on file (no
+ * real variant, e.g. "Suzuki Ravi") still renders as a single plain row;
+ * grouping only changes anything once there's more than one to group.
  *
  * Make/Model autocomplete added 2026-09-11: counter staff are
  * blue-collar and typing by hand, so a real typo ("Sazuki," "Carolla")
@@ -78,6 +99,23 @@ export function CarModelsView() {
 
   const knownMakes = useMemo(() => [...new Set(allCarModels.map((c) => c.make))].sort(), [allCarModels]);
   const knownModels = useMemo(() => [...new Set(allCarModels.map((c) => c.model))].sort(), [allCarModels]);
+
+  // Grouped by make+model (Mehmoon's direction, 2026-09-11): once trim-
+  // level rows exist (Corolla XLI/GLI/Altis/Grande, etc.), a flat list
+  // shows the same car four times over with no visual link between them.
+  // A model with only one row (no real variants, e.g. "Suzuki Ravi")
+  // renders exactly as before — grouping only changes anything once
+  // there's actually more than one row to group.
+  const groups = useMemo(() => {
+    const map = new Map<string, { make: string; model: string; rows: CarModel[] }>();
+    for (const c of carModels) {
+      const key = `${c.make}|${c.model}`;
+      const group = map.get(key) ?? { make: c.make, model: c.model, rows: [] };
+      group.rows.push(c);
+      map.set(key, group);
+    }
+    return [...map.values()].sort((a, b) => a.make.localeCompare(b.make) || a.model.localeCompare(b.model));
+  }, [carModels]);
 
   function startCreate() {
     setEditingId("new");
@@ -190,30 +228,39 @@ export function CarModelsView() {
         {carModels.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No car models found.</div>}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {carModels.map((c) => (
-            <div key={c.id} className="glass-card" style={{ padding: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 13.5 }}>
-                  {c.make} {c.model}{c.variant ? ` ${c.variant}` : ""}
-                </div>
-                <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
-                  {c.yearFrom && c.yearTo ? `${c.yearFrom}-${c.yearTo}` : c.yearFrom ? `${c.yearFrom}+` : "Year not specified"}
-                  {c.frameEngineName && ` · ${c.frameEngineName}`}
-                  {c.engineCapacityCc && ` · ${c.engineCapacityCc}cc`}
-                  {c.transmission && ` · ${c.transmission}`}
-                  {c.engineFuel && ` · ${c.engineFuel}`}
-                </div>
+          {groups.map((g) => {
+            const groupKey = `${g.make}|${g.model}`;
+            if (g.rows.length === 1) {
+              return <CarModelRow key={groupKey} c={g.rows[0]} onEdit={startEdit} onDelete={handleDelete} />;
+            }
+            return (
+              <div key={groupKey} className="glass-card" style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontWeight: 700, fontSize: 13.5 }}>{g.make} {g.model}</div>
+                {g.rows.map((c) => (
+                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, paddingLeft: 12, borderLeft: "2px solid var(--line)" }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 12.5 }}>{c.variant || "—"}</div>
+                      <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        {c.yearFrom && c.yearTo ? `${c.yearFrom}-${c.yearTo}` : c.yearFrom ? `${c.yearFrom}+` : "Year not specified"}
+                        {c.frameEngineName && ` · ${c.frameEngineName}`}
+                        {c.engineCapacityCc && ` · ${c.engineCapacityCc}cc`}
+                        {c.transmission && ` · ${c.transmission}`}
+                        {c.engineFuel && ` · ${c.engineFuel}`}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button type="button" onClick={() => startEdit(c)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "white", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => handleDelete(c)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "white", color: "oklch(55% 0.18 25)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                <button type="button" onClick={() => startEdit(c)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "white", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                  Edit
-                </button>
-                <button type="button" onClick={() => handleDelete(c)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "white", color: "oklch(55% 0.18 25)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -244,10 +291,16 @@ export function CarModelsView() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <input placeholder="Engine CC" type="number" value={form.engineCapacityCc ?? ""} onChange={(e) => field("engineCapacityCc", e.target.value ? Number(e.target.value) : undefined)} style={{ padding: 8, fontSize: 12.5 }} />
-            <input placeholder="Transmission" value={form.transmission ?? ""} onChange={(e) => field("transmission", e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />
+            <select value={form.transmission ?? ""} onChange={(e) => field("transmission", e.target.value)} style={{ padding: 8, fontSize: 12.5 }}>
+              <option value="">Transmission...</option>
+              {TRANSMISSION_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
 
-          <input placeholder="Engine fuel (e.g. Petrol, Diesel, Hybrid)" value={form.engineFuel ?? ""} onChange={(e) => field("engineFuel", e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />
+          <select value={form.engineFuel ?? ""} onChange={(e) => field("engineFuel", e.target.value)} style={{ padding: 8, fontSize: 12.5 }}>
+            <option value="">Engine fuel...</option>
+            {FUEL_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
 
           {error && <div className="error-text">{error}</div>}
 
@@ -261,6 +314,43 @@ export function CarModelsView() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** A make+model with no other variant on file — rendered exactly like
+ * before grouping existed, since there's nothing to group it under. */
+function CarModelRow({
+  c,
+  onEdit,
+  onDelete,
+}: {
+  c: CarModel;
+  onEdit: (c: CarModel) => void;
+  onDelete: (c: CarModel) => void;
+}) {
+  return (
+    <div className="glass-card" style={{ padding: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 13.5 }}>
+          {c.make} {c.model}{c.variant ? ` ${c.variant}` : ""}
+        </div>
+        <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
+          {c.yearFrom && c.yearTo ? `${c.yearFrom}-${c.yearTo}` : c.yearFrom ? `${c.yearFrom}+` : "Year not specified"}
+          {c.frameEngineName && ` · ${c.frameEngineName}`}
+          {c.engineCapacityCc && ` · ${c.engineCapacityCc}cc`}
+          {c.transmission && ` · ${c.transmission}`}
+          {c.engineFuel && ` · ${c.engineFuel}`}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <button type="button" onClick={() => onEdit(c)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "white", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          Edit
+        </button>
+        <button type="button" onClick={() => onDelete(c)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "white", color: "oklch(55% 0.18 25)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          Delete
+        </button>
+      </div>
     </div>
   );
 }
