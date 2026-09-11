@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
   markers,
@@ -173,11 +173,51 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  /**
+   * Blue-collar counter staff typing make/model by hand will genuinely
+   * spell "Suzuki" as "Sazuki" or "Corolla" as "Carolla" (Mehmoon's own
+   * example, 2026-09-11) — left unchecked, that fragments search and
+   * fitment across near-duplicate car models. This doesn't try to catch
+   * an outright misspelling (that's the frontend autocomplete's job —
+   * CarModelsView.tsx/InventoryView.tsx suggest from what's already on
+   * file as they type); it only catches the narrower, very common case
+   * of the SAME word typed in different casing ("suzuki" vs "Suzuki"),
+   * silently reusing whatever casing is already on file instead of
+   * creating a near-duplicate that differs only by case.
+   */
+  async function canonicalizeMakeModel(input: { make: string; model: string }, excludeId?: string) {
+    const [existingMake] = await db
+      .select({ make: carModels.make })
+      .from(carModels)
+      .where(
+        and(
+          sql`lower(${carModels.make}) = lower(${input.make})`,
+          excludeId ? sql`${carModels.id} != ${excludeId}` : undefined,
+        ),
+      )
+      .limit(1);
+    const [existingModel] = await db
+      .select({ model: carModels.model })
+      .from(carModels)
+      .where(
+        and(
+          sql`lower(${carModels.model}) = lower(${input.model})`,
+          excludeId ? sql`${carModels.id} != ${excludeId}` : undefined,
+        ),
+      )
+      .limit(1);
+    return {
+      make: existingMake?.make ?? input.make,
+      model: existingModel?.model ?? input.model,
+    };
+  }
+
   app.post(
     "/car-models",
     { schema: { body: carModelBodySchema } },
     async (request) => {
-      const [row] = await db.insert(carModels).values(request.body).returning();
+      const canonical = await canonicalizeMakeModel(request.body);
+      const [row] = await db.insert(carModels).values({ ...request.body, ...canonical }).returning();
       return row;
     },
   );
@@ -186,9 +226,14 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
     "/car-models/:id",
     { schema: { params: z.object({ id: z.string().uuid() }), body: carModelBodySchema } },
     async (request, reply) => {
+      // excludeId: without this, editing a row to FIX its own casing
+      // ("honda" -> "Honda") would match its own still-unwritten old
+      // casing and silently revert the correction — a real bug, caught
+      // while testing this feature.
+      const canonical = await canonicalizeMakeModel(request.body, request.params.id);
       const [row] = await db
         .update(carModels)
-        .set(request.body)
+        .set({ ...request.body, ...canonical })
         .where(eq(carModels.id, request.params.id))
         .returning();
       if (!row) return reply.code(404).send({ error: "Car model not found" });
