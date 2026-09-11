@@ -5,6 +5,61 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-11 — Built a dedicated Car Models screen, plus fitment-detail fields
+
+**What triggered this:** Mehmoon asked directly whether there was a
+screen to add/edit/view cars by make, model, variant, and year. There
+wasn't — a `car_models` row could only ever be created inline while
+tagging a part's fitment in Inventory, with no way to browse, correct, or
+remove one afterward.
+
+**Decision:** a plain, standalone CRUD screen (`CarModelsView.tsx`),
+plus five new columns on `car_models` (`variant`, `frameEngineName`,
+`engineCapacityCc`, `transmission`, `engineFuel`) picked up in the same
+pass since Mehmoon asked for "variant/engine fields too" and four of
+those five directly close a gap this repo's own CLAUDE.md had been
+flagging since the schema was first built (section 5.3: the Control Part
+Form's fitment-line spec includes Frame/Engine name, CC, Transmission,
+and Fuel, none of which existed as columns).
+
+**Key design choices:**
+- **`variant` is its own column**, not folded into `frameEngineName` or
+  `model`. The client's own notes (as transcribed into CLAUDE.md) never
+  use the word, but Mehmoon's request was explicit and unambiguous, and
+  a trim level ("GLi" vs. "Altis") is a genuinely different concept from
+  an engine/frame code — collapsing them would lose information the
+  moment two variants shared a frame code.
+- **All five new fields are nullable free text, not enums.** The client
+  has never specified a closed list of transmission or fuel types, and
+  guessing one (e.g. Manual/Automatic/CVT) risks rejecting a real value
+  a future data-entry pass needs (e.g. "5-Speed Manual" or "Hybrid CVT").
+  Free text costs nothing to relax into an enum later if the client ever
+  does confirm a fixed list; a wrong enum would need a migration to undo.
+- **Delete relies on the existing `ON DELETE CASCADE`** on
+  `part_car_models.carModelId` (already there from when fitment was
+  first built) rather than a new "check for dependents first" query — the
+  database already guarantees no orphaned fitment rows. The only gap that
+  needed closing was that deleting a car model with real fitment attached
+  is otherwise silent, so the frontend adds a plain confirmation warning
+  before calling delete, not a backend safeguard.
+- **`createCarModel()` moved from positional arguments to a single input
+  object.** With the field count going from 4 to 9, positional arguments
+  would have made every call site error-prone to read; this is a pure
+  call-site clarity change, not a behavior change — `InventoryView.tsx`'s
+  own inline creation flow still only collects make/model/year, unchanged.
+
+**Verified end to end through the real UI**: created a car model with
+every field populated and confirmed it displayed correctly; edited it
+and confirmed the form pre-filled from the stored row exactly; searched
+by variant and confirmed the list narrowed correctly; confirmed deleting
+a row actually removes it (verified via the API directly, since the
+automated test browser's native confirmation dialog auto-cancels in this
+environment — a tooling limitation, not something affecting a real user).
+
+**Source:** Mehmoon, 2026-09-11.
+
+---
+
 ## 2026-09-11 — Built the LIFO cost-layer engine and COGS
 
 **What triggered this:** Purchasing (built minutes earlier) finally gave
