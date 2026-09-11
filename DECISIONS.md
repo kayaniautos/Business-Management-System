@@ -5,6 +5,97 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-11 — Built the LIFO cost-layer engine and COGS
+
+**What triggered this:** Purchasing (built minutes earlier) finally gave
+the app a real, recorded unit cost — until then there was nothing
+resembling a "cost" anywhere in the schema, only sale prices. With a real
+cost source in place, this was the natural next step: presented alongside
+supplier returns, a Party ledger view, and settlement channels as next-
+feature options, picked as the recommended one since the client's own
+notes call out LIFO as something that "must be deliberate," and it
+directly extends the purchase-cost data that had just landed.
+
+**Decision:** a genuine LIFO layer system — `stock_cost_layers` (one row
+per Goods Receipt line, quantity + unit cost, decremented as sold) and
+`stock_layer_consumptions` (the audit trail of which layer paid for which
+sale) — not a shortcut like a moving-average cost or a single "current
+cost" field on the part. The client's own language is specific ("LIFO
+basis"), and a moving average would have been cheaper to build but wrong.
+
+**Key design choices:**
+- **Layers are created only by a posted Goods Receipt**, never by a Stock
+  Adjustment. A Stock Adjustment has no cost concept in the client's own
+  notes — inventing one (e.g. costing a "found" unit at the current LIFO
+  rate) would be a guess, not a confirmed rule. This means a negative
+  Stock Adjustment (shrinkage) can leave a layer's tracked remaining
+  quantity slightly ahead of true on-hand quantity — accepted as a known,
+  narrow gap rather than solved by inventing a rule; "Stock Adjustment
+  Net" is already a distinct chart-of-accounts line from COGS, so nothing
+  downstream needs a cost figure for an adjustment yet.
+- **LIFO ordering is `ORDER BY id DESC`, not a timestamp comparison.**
+  UUIDv7 primary keys (already a project-wide convention, DECISIONS.md's
+  own UUIDv7 entry) are time-ordered, so the id itself is a correct,
+  index-friendly proxy for "most recently created" — one less column to
+  reason about, and no risk of two layers created in the same millisecond
+  tying on `createdAt`.
+- **Unposting a sale reverses the SPECIFIC layers it drew from, not a
+  fresh LIFO pass.** The alternative — treating a reversal as its own new
+  "add stock back" event and letting LIFO decide where it lands — would
+  restore the stock to whatever's now the *newest* layer, not necessarily
+  the one it actually came from, silently corrupting the cost history.
+  Instead, the reversal looks up the document's original decrement
+  movements, finds exactly which layers their consumptions touched, and
+  credits those back before deleting the consumption rows. A re-post
+  after that starts genuinely fresh (LIFO runs again from scratch), which
+  is correct since the physical event (a new sale of the same stock) is
+  happening at a new point in time.
+- **A Goods Receipt keeps exactly one layer per line for its whole
+  lifetime**, even across post → unpost → re-post cycles — re-posting
+  reactivates the existing layer (restores `quantityRemaining` to
+  `quantityReceived`) rather than inserting a duplicate. This mirrors the
+  receipt's own document-level idempotency (its `stock_movements` rows
+  are append-only for audit, but its cost layer is a derived, current-
+  state structure, not required to replay the same way).
+- **Not blocking a sale that runs out of cost layers.** Same precedent as
+  the quantity ledger itself (selling into negative stock isn't blocked):
+  a part with no cost layer yet (pre-LIFO stock, or a sale that outruns
+  what's been costed) still sells fine — its COGS is simply understated
+  for the uncosted portion, rather than inventing a fallback cost or
+  blocking the sale.
+- **Surfaced on existing screens, not a new report.** Reports/vouchers
+  are still explicitly open with the client ("bear with me for reports").
+  Rather than build a speculative "Margin Report" against an unconfirmed
+  list, the computed figures were added to Sales History (COGS + margin
+  per document) and Stock Adjustment (the current LIFO cost for a part)
+  — both already-shipped, already-tested screens where the numbers are
+  immediately useful without inventing new UI surface.
+- **No permission gate on cost/margin visibility.** CLAUDE.md 5.8 already
+  flags "who can see margin/cost data" as an open Authority Levels
+  question the client hasn't answered. Every other feature in the app is
+  visible to any logged-in user today (nothing is session/role-gated
+  yet) — adding a gate here specifically, ahead of that conversation,
+  would be inventing a permission rule as much as skipping one would be.
+  Flagged, not resolved.
+
+**Verified end to end** (curl for the arithmetic, real browser UI for the
+display): retroactively created a cost layer for an already-posted Goods
+Receipt by unposting/re-posting it through the real API; created a second
+receipt at a different cost and confirmed the "current cost" figure
+correctly tracked the newer batch; sold across the two batches and
+confirmed COGS split exactly at the layer boundary (2 units at the old
+cost + 2 at the new, not blended); posted, unposted, and re-posted a
+Delivery Note and confirmed COGS dropped to zero on unpost (proving the
+consumption rows were actually deleted, not just netted) and recomputed
+correctly on re-post; confirmed both new UI surfaces (Stock Adjustment's
+"Last received cost," Sales History's "Cost of goods sold" / "Gross
+margin") render the right numbers through the real browser.
+
+**Source:** Mehmoon, 2026-09-11 (picked from a presented list of
+next-feature options).
+
+---
+
 ## 2026-09-11 — Built Purchasing (Purchase Order → Goods Receipt → Purchase Invoice), first pass
 
 **What triggered this:** Mehmoon picked "Wire real stock movements into
