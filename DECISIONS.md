@@ -5,6 +5,59 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-12 — Built Invoice-from-Delivery-Note(s), an Invoice never moves stock a second time
+
+**What triggered this:** presented as one of the next-feature options
+after supplier returns shipped, and picked as the recommended one — it
+closes a real, confirmed gap (CLAUDE.md 5.10: "An Invoice can draw from
+one DN or several combined") that had been sitting unbuilt since the
+sales chain was first designed, since `sales_document_links` was made
+many-to-many specifically anticipating it.
+
+**Decision:** no schema change. A new route (`invoices.ts`) lets staff
+pick one or more already-posted Delivery Notes for the same entity and
+customer and combine them onto one new Invoice, reusing the same
+`sales_documents` table and `documentType: "invoice"` that POS checkout
+already uses.
+
+**Key design choice — the new Invoice owns no stock effect of its own.**
+The source DN(s) already decremented stock (and consumed LIFO cost
+layers) when THEY were posted. Writing a second stock movement for the
+Invoice would double-count. This is the same relationship already
+established between a Purchase Invoice and its Goods Receipt (built
+2026-09-11) — a document that formalizes an already-completed delivery
+doesn't get its own accounting effect, it just records the bill.
+
+**Consequence that needed a deliberate fix, not just an omission:** the
+generic `/:id/post`/`/:id/unpost` endpoints (`sales.ts`) treat every
+non-Quotation document uniformly, and would have let someone "unpost"
+this new Invoice — which would incorrectly WRITE a stock-restore
+movement for a document that never wrote a stock-decrement one in the
+first place, silently over-crediting stock. Fixed by checking, in
+`/:id/unpost` only, whether the Invoice has an incoming
+`sales_document_links` row from a `delivery_note`; if so, the request is
+rejected by name ("unpost the delivery note instead") rather than
+allowed through. A checkout-created Invoice (no such link) is
+unaffected — its existing unpost behavior, which DOES own a real stock
+movement, is unchanged.
+
+**"Merging the same item across multiple DNs onto one invoice line"**
+(the client's own phrasing) is scoped narrowly: two lines merge only
+when both the part AND the unit price match exactly. A price mismatch
+across DNs is a real, if unusual, situation (a price change between
+deliveries) that shouldn't silently blend into one number — kept as
+separate lines instead of inventing a weighted-average rule nobody
+asked for.
+
+**Scope trim, flagged not resolved:** a DN can be invoiced in full,
+exactly once — there's no partial, line-by-line invoicing of one DN
+split across several Invoices. Nothing in the client's notes asks for
+that (only for combining several WHOLE DNs onto one Invoice), and
+building it would need a new "quantity already invoiced" concept per DN
+line that doesn't exist anywhere else in this schema.
+
+---
+
 ## 2026-09-12 — Built supplier returns, reusing the purchase-document tables instead of a new one
 
 **What triggered this:** presented as one of the next-feature options
