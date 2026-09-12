@@ -5,6 +5,60 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-12 — Built supplier returns, reusing the purchase-document tables instead of a new one
+
+**What triggered this:** presented as one of the next-feature options
+after settlement channels shipped earlier the same day, and picked as
+the recommended one — it closed the last unbuilt item flagged in the
+original Purchasing pass (CLAUDE.md section 7) and needed no new
+business-rule guesses, only a cap already computable from the LIFO
+cost-layer engine.
+
+**Decision:** model a Supplier Return as a new `documentType` value
+(`"supplier_return"`) on the EXISTING `purchase_documents` /
+`purchase_document_lines` / `purchase_document_links` tables, rather
+than a standalone table. Matches the project's own established pattern
+of one shared header table per document family (the sales chain does
+the same for Quotation/DN/Invoice).
+
+**Why a return must start from a specific posted Goods Receipt, never a
+blank form:** the handover doc is explicit — "a ledger entry linked back
+to the original purchase voucher, not a free-floating credit note"
+(section 6.3). Enforced with a required `purchase_document_links` row
+(source GRN → new return doc), not just a free-text reference field, so
+the link is queryable and the source is unambiguous.
+
+**Why the returnable quantity is capped by the source GRN's own cost
+layer, not the originally-received quantity:** units already sold can't
+be returned. The LIFO cost-layer engine (built 2026-09-11) already
+tracks exactly how much of a given receipt's batch is still on hand
+(`quantityRemaining`) — reusing that figure as the cap, rather than
+inventing a separate "returnable quantity" concept, means the two can
+never drift apart. The rejection error names the real remaining count so
+staff aren't left guessing.
+
+**Why `unitCost` is sourced from the original GRN's line, never accepted
+from the client:** prevents a return being costed differently than it
+was actually received — the same "amounts are always recomputed
+server-side, never trusted from the client" principle already applied to
+POS checkout.
+
+**Stock/cost-layer direction:** a Supplier Return's stock movement is a
+DECREASE (opposite of a Goods Receipt's INCREASE) and it targets the
+SPECIFIC layer the source GRN created, not a generic LIFO consumption
+pass — a return is physically the same batch that arrived on that
+receipt, so it isn't "the newest available stock," it's "this exact
+batch, going back."
+
+**Refactor, not new code path:** `purchases.ts`'s post/unpost handlers
+were changed from a hardcoded `documentType !== "goods_receipt"` check to
+a generic `stockEffectFunctionsFor(documentType)` dispatcher, so Goods
+Receipt and Supplier Return share one endpoint. Verified Goods Receipt's
+own post/unpost behavior was unchanged by the refactor before relying on
+it for the new document type.
+
+---
+
 ## 2026-09-12 — Built settlement channels, scoped narrower than the Vouchers module
 
 **What triggered this:** presented as one of four next-feature options
