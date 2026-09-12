@@ -13,6 +13,7 @@ import {
   parties,
   stockMovements,
   stockLayerConsumptions,
+  settlements,
 } from "../../db/schema/index.js";
 import { assignDocumentNumber } from "../services/document-numbers.js";
 import {
@@ -117,6 +118,21 @@ const salesDocumentDetailSchema = salesDocumentSummarySchema.extend({
   // or a document that hasn't been posted yet. Understated, not wrong,
   // for any part sold before a cost layer existed for it.
   cogsAmount: z.string(),
+  // Settlements (CLAUDE.md 5.10, "Cash, EasyPaisa, JazzCash, Bank
+  // Transfer") recorded against this document — always empty for
+  // anything but a posted Invoice (settlements.ts only accepts those).
+  // amountPaid is the plain sum, not clamped or validated against the
+  // total — overpayment isn't blocked, see settlements.ts's own comment.
+  settlements: z.array(
+    z.object({
+      id: z.string(),
+      channel: z.enum(["cash", "easypaisa", "jazzcash", "bank_transfer"]),
+      amount: z.string(),
+      paymentDate: z.string(),
+      referenceNote: z.string().nullable(),
+    }),
+  ),
+  amountPaid: z.string(),
 });
 
 /**
@@ -255,7 +271,28 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
         .innerJoin(stockLayerConsumptions, eq(stockLayerConsumptions.stockMovementId, stockMovements.id))
         .where(and(eq(stockMovements.salesDocumentId, id), eq(stockMovements.movementType, "sale")));
 
-      return { ...header, lines: lineRows, discounts: discountRows, cogsAmount: cogsRow?.total ?? "0" };
+      const settlementRows = await db
+        .select({
+          id: settlements.id,
+          channel: settlements.channel,
+          amount: settlements.amount,
+          paymentDate: settlements.paymentDate,
+          referenceNote: settlements.referenceNote,
+        })
+        .from(settlements)
+        .where(eq(settlements.salesDocumentId, id))
+        .orderBy(settlements.paymentDate, settlements.createdAt);
+
+      const amountPaid = settlementRows.reduce((sum, s) => sum + Number(s.amount), 0);
+
+      return {
+        ...header,
+        lines: lineRows,
+        discounts: discountRows,
+        cogsAmount: cogsRow?.total ?? "0",
+        settlements: settlementRows,
+        amountPaid: amountPaid.toFixed(2),
+      };
     },
   );
 

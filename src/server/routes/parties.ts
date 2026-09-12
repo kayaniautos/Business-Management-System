@@ -9,6 +9,7 @@ import {
   salesDocuments,
   purchaseDocuments,
   legalEntities,
+  settlements,
 } from "../../db/schema/index.js";
 
 const partyStatusSchema = z.enum(["C1", "C2", "C3"]);
@@ -133,23 +134,24 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
    * purchase_documents row from referencing any party, so this reads both
    * tables rather than trusting Nature to predict which one has data.
    *
-   * `totalInvoiced`/`totalBilled` are deliberately NOT called an
-   * "outstanding balance" anywhere in this response or the screen that
-   * renders it — CLAUDE.md 5.10's "settled invoice-wise" language implies
-   * a real balance concept, but computing one needs payment/receipt
-   * records (the Vouchers/settlement-channels module, not built yet).
-   * These totals are simply the sum of posted amounts on the one document
-   * type that represents a real financial commitment on each side — an
-   * Invoice for sales, a Purchase Invoice for purchases — not a DN,
-   * Quotation, Purchase Order, or Goods Receipt, none of which are
-   * themselves a bill. If nothing has been paid yet, this number happens
-   * to equal the true outstanding balance; once real payments exist
-   * anywhere in the system, it will not, and must not be presented as if
-   * it still were.
+   * `totalInvoiced`/`totalBilled` are the sum of posted amounts on the
+   * ONE document type that represents a real financial commitment on
+   * each side — an Invoice for sales, a Purchase Invoice for purchases —
+   * not a DN, Quotation, Purchase Order, or Goods Receipt, none of which
+   * are themselves a bill. `totalReceived`/`totalPaid` (added 2026-09-12
+   * once settlements existed — see settlements.ts) are the sum of actual
+   * settlement rows against those same documents, and `netReceivable`/
+   * `netPayable` subtract them — this is now a REAL running balance, not
+   * just "everything ever billed." It can still be wrong in one direction
+   * a client might not expect: a settlement recorded against a document
+   * that predates this feature, or a document type outside the two named
+   * above (e.g. money exchanged against a DN before it's ever invoiced)
+   * won't be reflected — same "only a real bill counts" scoping as the
+   * gross totals.
    */
   const ledgerTransactionSchema = z.object({
     id: z.string(),
-    kind: z.enum(["sale", "purchase"]),
+    kind: z.enum(["sale", "purchase", "receipt", "payment_made"]),
     documentType: z.string(),
     documentNumber: z.string(),
     entityName: z.string(),
@@ -168,7 +170,11 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
             party: partyResponseSchema,
             transactions: z.array(ledgerTransactionSchema),
             totalInvoiced: z.string(),
+            totalReceived: z.string(),
+            netReceivable: z.string(),
             totalBilled: z.string(),
+            totalPaid: z.string(),
+            netPayable: z.string(),
           }),
           404: z.object({ error: z.string() }),
         },
@@ -212,9 +218,57 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
         .innerJoin(legalEntities, eq(purchaseDocuments.legalEntityId, legalEntities.id))
         .where(eq(purchaseDocuments.partyId, id));
 
+      const receiptRows = await db
+        .select({
+          id: settlements.id,
+          documentNumber: salesDocuments.documentNumber,
+          entityName: legalEntities.name,
+          documentDate: settlements.paymentDate,
+          totalAmount: settlements.amount,
+          channel: settlements.channel,
+        })
+        .from(settlements)
+        .innerJoin(salesDocuments, eq(settlements.salesDocumentId, salesDocuments.id))
+        .innerJoin(legalEntities, eq(salesDocuments.legalEntityId, legalEntities.id))
+        .where(eq(salesDocuments.partyId, id));
+
+      const paymentRows = await db
+        .select({
+          id: settlements.id,
+          documentNumber: purchaseDocuments.documentNumber,
+          entityName: legalEntities.name,
+          documentDate: settlements.paymentDate,
+          totalAmount: settlements.amount,
+          channel: settlements.channel,
+        })
+        .from(settlements)
+        .innerJoin(purchaseDocuments, eq(settlements.purchaseDocumentId, purchaseDocuments.id))
+        .innerJoin(legalEntities, eq(purchaseDocuments.legalEntityId, legalEntities.id))
+        .where(eq(purchaseDocuments.partyId, id));
+
       const transactions = [
         ...saleRows.map((r) => ({ ...r, kind: "sale" as const })),
         ...purchaseRows.map((r) => ({ ...r, kind: "purchase" as const })),
+        ...receiptRows.map((r) => ({
+          id: r.id,
+          kind: "receipt" as const,
+          documentType: `receipt_${r.channel}`,
+          documentNumber: r.documentNumber,
+          entityName: r.entityName,
+          documentDate: r.documentDate,
+          status: "posted",
+          totalAmount: r.totalAmount,
+        })),
+        ...paymentRows.map((r) => ({
+          id: r.id,
+          kind: "payment_made" as const,
+          documentType: `payment_${r.channel}`,
+          documentNumber: r.documentNumber,
+          entityName: r.entityName,
+          documentDate: r.documentDate,
+          status: "posted",
+          totalAmount: r.totalAmount,
+        })),
       ].sort((a, b) => (a.documentDate < b.documentDate ? 1 : a.documentDate > b.documentDate ? -1 : 0));
 
       const [invoicedRow] = await db
@@ -226,6 +280,23 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
         .select({ total: sql<string>`coalesce(sum(${purchaseDocuments.totalAmount}), 0)` })
         .from(purchaseDocuments)
         .where(and(eq(purchaseDocuments.partyId, id), eq(purchaseDocuments.documentType, "purchase_invoice"), eq(purchaseDocuments.status, "posted")));
+
+      const [receivedRow] = await db
+        .select({ total: sql<string>`coalesce(sum(${settlements.amount}), 0)` })
+        .from(settlements)
+        .innerJoin(salesDocuments, eq(settlements.salesDocumentId, salesDocuments.id))
+        .where(eq(salesDocuments.partyId, id));
+
+      const [paidRow] = await db
+        .select({ total: sql<string>`coalesce(sum(${settlements.amount}), 0)` })
+        .from(settlements)
+        .innerJoin(purchaseDocuments, eq(settlements.purchaseDocumentId, purchaseDocuments.id))
+        .where(eq(purchaseDocuments.partyId, id));
+
+      const totalInvoiced = invoicedRow?.total ?? "0";
+      const totalBilled = billedRow?.total ?? "0";
+      const totalReceived = receivedRow?.total ?? "0";
+      const totalPaid = paidRow?.total ?? "0";
 
       return {
         party: {
@@ -239,8 +310,12 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
           phoneNumbers: phoneRows.map((r) => r.phoneNumber),
         },
         transactions,
-        totalInvoiced: invoicedRow?.total ?? "0",
-        totalBilled: billedRow?.total ?? "0",
+        totalInvoiced,
+        totalReceived,
+        netReceivable: (Number(totalInvoiced) - Number(totalReceived)).toFixed(2),
+        totalBilled,
+        totalPaid,
+        netPayable: (Number(totalBilled) - Number(totalPaid)).toFixed(2),
       };
     },
   );

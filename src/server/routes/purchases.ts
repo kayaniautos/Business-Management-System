@@ -9,6 +9,7 @@ import {
   legalEntities,
   controlParts,
   parties,
+  settlements,
 } from "../../db/schema/index.js";
 import { applyStockMovementsForPurchaseDocument } from "../services/purchase-stock-movements.js";
 import { applyCostLayersForPurchaseDocument } from "../services/lifo-cost-layers.js";
@@ -39,6 +40,19 @@ const purchaseDocumentDetailSchema = purchaseDocumentSummarySchema.extend({
       lineAmount: z.string(),
     }),
   ),
+  // Settlements (CLAUDE.md 5.10) recorded against this document — only
+  // ever non-empty for a posted Purchase Invoice, since settlements.ts
+  // rejects every other document type/status.
+  settlements: z.array(
+    z.object({
+      id: z.string(),
+      channel: z.enum(["cash", "easypaisa", "jazzcash", "bank_transfer"]),
+      amount: z.string(),
+      paymentDate: z.string(),
+      referenceNote: z.string().nullable(),
+    }),
+  ),
+  amountPaid: z.string(),
 });
 
 const errorResponseSchema = z.object({ error: z.string() });
@@ -148,7 +162,21 @@ export const purchasesRoutes: FastifyPluginAsync = async (fastify) => {
         .where(eq(purchaseDocumentLines.purchaseDocumentId, id))
         .orderBy(purchaseDocumentLines.lineNumber);
 
-      return { ...header, lines: lineRows };
+      const settlementRows = await db
+        .select({
+          id: settlements.id,
+          channel: settlements.channel,
+          amount: settlements.amount,
+          paymentDate: settlements.paymentDate,
+          referenceNote: settlements.referenceNote,
+        })
+        .from(settlements)
+        .where(eq(settlements.purchaseDocumentId, id))
+        .orderBy(settlements.paymentDate, settlements.createdAt);
+
+      const amountPaid = settlementRows.reduce((sum, s) => sum + Number(s.amount), 0);
+
+      return { ...header, lines: lineRows, settlements: settlementRows, amountPaid: amountPaid.toFixed(2) };
     },
   );
 
