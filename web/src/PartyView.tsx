@@ -3,10 +3,13 @@ import {
   createParty,
   getParties,
   getPartyLedger,
+  SETTLEMENT_CHANNEL_LABELS,
   type Party,
   type PartyLedger,
+  type PartyLedgerTransaction,
   type PartyNature,
   type PartyStatus,
+  type SettlementChannel,
 } from "./api.js";
 
 const TXN_TYPE_LABELS: Record<string, string> = {
@@ -17,6 +20,19 @@ const TXN_TYPE_LABELS: Record<string, string> = {
   goods_receipt: "Goods Receipt",
   purchase_invoice: "Purchase Invoice",
 };
+
+// A receipt/payment_made row's documentType is a synthetic
+// "receipt_<channel>"/"payment_<channel>" string (parties.ts's /ledger
+// endpoint) rather than a real document type, since it isn't one — this
+// pulls the channel back out to render "Payment received (Cash)" etc.
+function describeTransaction(t: PartyLedgerTransaction): string {
+  if (t.kind === "receipt" || t.kind === "payment_made") {
+    const channel = t.documentType.replace(/^(receipt|payment)_/, "") as SettlementChannel;
+    const label = SETTLEMENT_CHANNEL_LABELS[channel] ?? channel;
+    return t.kind === "receipt" ? `Payment received (${label})` : `Payment made (${label})`;
+  }
+  return TXN_TYPE_LABELS[t.documentType] ?? t.documentType;
+}
 
 const STATUS_LABELS: Record<PartyStatus, string> = {
   C1: "C1 · Corporate",
@@ -156,33 +172,59 @@ export function PartyView() {
               <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: 10, borderRadius: 10, background: "oklch(97% 0.01 260)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                   <span className="muted">Total invoiced (posted)</span>
-                  <span style={{ fontWeight: 700 }}>Rs {ledger.totalInvoiced}</span>
+                  <span>Rs {ledger.totalInvoiced}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                  <span className="muted">Total received</span>
+                  <span>Rs {ledger.totalReceived}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, paddingTop: 4, borderTop: "1px solid var(--line)" }}>
+                  <span style={{ fontWeight: 700 }}>Net receivable</span>
+                  <span style={{ fontWeight: 800 }}>Rs {ledger.netReceivable}</span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: 10, borderRadius: 10, background: "oklch(97% 0.01 260)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                   <span className="muted">Total billed (posted)</span>
-                  <span style={{ fontWeight: 700 }}>Rs {ledger.totalBilled}</span>
+                  <span>Rs {ledger.totalBilled}</span>
                 </div>
-                <div className="muted" style={{ fontSize: 10.5, marginTop: 2 }}>
-                  Not a payment-adjusted balance — no receipts/payments are tracked yet.
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                  <span className="muted">Total paid</span>
+                  <span>Rs {ledger.totalPaid}</span>
                 </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, paddingTop: 4, borderTop: "1px solid var(--line)" }}>
+                  <span style={{ fontWeight: 700 }}>Net payable</span>
+                  <span style={{ fontWeight: 800 }}>Rs {ledger.netPayable}</span>
+                </div>
+              </div>
+              <div className="muted" style={{ fontSize: 10.5 }}>
+                Only counts posted Invoices/Purchase Invoices and their recorded payments — a Quotation, Delivery Note, Purchase Order, or Goods Receipt isn't a bill, so none of those affect these figures.
               </div>
 
               <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>Transactions</div>
               {ledger.transactions.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No transactions on file yet.</div>}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {ledger.transactions.map((t) => (
-                  <div key={t.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, borderBottom: "1px solid var(--line)", paddingBottom: 6 }}>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{t.documentNumber}</div>
-                      <div className="muted" style={{ fontSize: 11 }}>
-                        {TXN_TYPE_LABELS[t.documentType] ?? t.documentType} &middot; {t.entityName} &middot; {t.documentDate} &middot; {t.status}
+                {ledger.transactions.map((t) => {
+                  const isReceivableSide = t.kind === "sale" || t.kind === "receipt";
+                  const isIncrease = t.kind === "sale" || t.kind === "purchase";
+                  const color = isReceivableSide ? "oklch(45% 0.13 150)" : "oklch(55% 0.18 25)";
+                  return (
+                    <div key={t.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, borderBottom: "1px solid var(--line)", paddingBottom: 6 }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{describeTransaction(t)}</div>
+                        <div className="muted" style={{ fontSize: 11 }}>
+                          {t.kind === "sale" || t.kind === "purchase"
+                            ? `${t.documentNumber} · ${t.entityName} · ${t.documentDate} · ${t.status}`
+                            : `${t.documentNumber} · ${t.documentDate}`}
+                        </div>
+                      </div>
+                      <div style={{ fontWeight: 700, color }}>
+                        {isIncrease ? "+" : "-"}Rs {t.totalAmount}
                       </div>
                     </div>
-                    <div style={{ fontWeight: 700, color: t.kind === "sale" ? "oklch(45% 0.13 150)" : "oklch(55% 0.18 25)" }}>
-                      {t.kind === "sale" ? "+" : "-"}Rs {t.totalAmount}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}

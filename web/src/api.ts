@@ -283,9 +283,47 @@ export const createParty = (party: {
   phoneNumbers: string[];
 }) => postJson<Party>("/api/parties", party);
 
+export type SettlementChannel = "cash" | "easypaisa" | "jazzcash" | "bank_transfer";
+
+export const SETTLEMENT_CHANNEL_LABELS: Record<SettlementChannel, string> = {
+  cash: "Cash",
+  easypaisa: "EasyPaisa",
+  jazzcash: "JazzCash",
+  bank_transfer: "Bank Transfer",
+};
+
+export interface Settlement {
+  id: string;
+  channel: SettlementChannel;
+  amount: string;
+  paymentDate: string;
+  referenceNote: string | null;
+}
+
+export const getSettlements = (opts: { salesDocumentId?: string; purchaseDocumentId?: string }) => {
+  const params = new URLSearchParams();
+  if (opts.salesDocumentId) params.set("salesDocumentId", opts.salesDocumentId);
+  if (opts.purchaseDocumentId) params.set("purchaseDocumentId", opts.purchaseDocumentId);
+  return getJson<Settlement[]>(`/api/settlements?${params.toString()}`);
+};
+
+export const createSettlement = (input: {
+  salesDocumentId?: string;
+  purchaseDocumentId?: string;
+  channel: SettlementChannel;
+  amount: number;
+  paymentDate?: string;
+  referenceNote?: string;
+}) => postJson<Settlement>("/api/settlements", input);
+
+export async function deleteSettlement(id: string): Promise<void> {
+  const res = await fetch(`/api/settlements/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Could not delete payment");
+}
+
 export interface PartyLedgerTransaction {
   id: string;
-  kind: "sale" | "purchase";
+  kind: "sale" | "purchase" | "receipt" | "payment_made";
   documentType: string;
   documentNumber: string;
   entityName: string;
@@ -297,13 +335,17 @@ export interface PartyLedgerTransaction {
 export interface PartyLedger {
   party: Party;
   transactions: PartyLedgerTransaction[];
-  // Total invoiced (sales) / billed (purchases), posted documents only —
-  // NOT an outstanding balance. No payment/receipt tracking exists yet
-  // (the Vouchers/settlement-channels module isn't built), so this can't
-  // be reduced by what's actually been paid. See parties.ts's own comment
-  // on the /ledger endpoint for the full reasoning.
+  // Total invoiced (sales) / billed (purchases), posted documents only,
+  // and totalReceived/totalPaid from real settlement records — net
+  // figures are a genuine running balance now (settlements built
+  // 2026-09-12). See parties.ts's own /ledger comment for what's still
+  // excluded (anything that isn't a posted Invoice/Purchase Invoice).
   totalInvoiced: string;
+  totalReceived: string;
+  netReceivable: string;
   totalBilled: string;
+  totalPaid: string;
+  netPayable: string;
 }
 
 export const getPartyLedger = (id: string) => getJson<PartyLedger>(`/api/parties/${id}/ledger`);
@@ -343,6 +385,10 @@ export interface SalesDocumentDetail extends SalesDocumentSummary {
   // LIFO-derived cost of goods sold, document-level total (CLAUDE.md "LIFO
   // must be deliberate"). "0.00" for a Quotation or a document not posted.
   cogsAmount: string;
+  // Settlements (CLAUDE.md 5.10) — only ever non-empty for a posted
+  // Invoice, since settlements.ts rejects every other document type.
+  settlements: Settlement[];
+  amountPaid: string;
 }
 
 export type SalesDocumentType = "quotation" | "delivery_note" | "invoice";
@@ -520,6 +566,10 @@ export interface PurchaseDocumentDetail extends PurchaseDocumentSummary {
     unitCost: string;
     lineAmount: string;
   }[];
+  // Settlements (CLAUDE.md 5.10) — only ever non-empty for a posted
+  // Purchase Invoice, since settlements.ts rejects every other type.
+  settlements: Settlement[];
+  amountPaid: string;
 }
 
 export type PurchaseDocumentType = "purchase_order" | "goods_receipt" | "purchase_invoice";

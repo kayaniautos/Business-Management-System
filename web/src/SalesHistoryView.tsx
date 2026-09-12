@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import {
+  createSettlement,
+  deleteSettlement,
   getSalesDocument,
   getSalesHistory,
   postSalesDocument,
   unpostSalesDocument,
+  SETTLEMENT_CHANNEL_LABELS,
   type SalesDocumentDetail,
   type SalesDocumentSummary,
+  type SettlementChannel,
 } from "./api.js";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -25,6 +29,11 @@ export function SalesHistoryView() {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<SalesDocumentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [payChannel, setPayChannel] = useState<SettlementChannel>("cash");
+  const [payAmount, setPayAmount] = useState("");
+  const [payRef, setPayRef] = useState("");
+  const [paySaving, setPaySaving] = useState(false);
 
   function load(query?: string) {
     getSalesHistory(query ? { q: query } : undefined)
@@ -62,6 +71,37 @@ export function SalesHistoryView() {
       load(q);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not unpost document");
+    }
+  }
+
+  async function handleRecordPayment() {
+    if (!selected || !payAmount || Number(payAmount) <= 0) return;
+    setPaySaving(true);
+    setError(null);
+    try {
+      await createSettlement({
+        salesDocumentId: selected.id,
+        channel: payChannel,
+        amount: Number(payAmount),
+        referenceNote: payRef.trim() || undefined,
+      });
+      setPayAmount("");
+      setPayRef("");
+      await openDetail(selected.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not record payment");
+    } finally {
+      setPaySaving(false);
+    }
+  }
+
+  async function handleDeletePayment(id: string) {
+    if (!selected) return;
+    try {
+      await deleteSettlement(id);
+      await openDetail(selected.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove payment");
     }
   }
 
@@ -203,6 +243,54 @@ export function SalesHistoryView() {
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                 <span className="muted">Gross margin</span>
                 <span style={{ fontWeight: 700 }}>Rs {(Number(selected.totalAmount) - Number(selected.cogsAmount)).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
+          {selected.status === "posted" && selected.documentType === "invoice" && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span className="muted">Amount paid</span>
+                <span style={{ fontWeight: 700 }}>Rs {selected.amountPaid}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span className="muted">Balance due</span>
+                <span style={{ fontWeight: 700 }}>Rs {(Number(selected.totalAmount) - Number(selected.amountPaid)).toFixed(2)}</span>
+              </div>
+
+              {selected.settlements.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {selected.settlements.map((s) => (
+                    <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
+                      <span className="muted">
+                        {SETTLEMENT_CHANNEL_LABELS[s.channel]} &middot; {s.paymentDate}{s.referenceNote ? ` · ${s.referenceNote}` : ""}
+                      </span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontWeight: 700 }}>Rs {s.amount}</span>
+                        <button type="button" onClick={() => handleDeletePayment(s.id)} style={{ border: "none", background: "none", color: "var(--ink-300)", cursor: "pointer", fontSize: 14 }}>
+                          &times;
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <select value={payChannel} onChange={(e) => setPayChannel(e.target.value as SettlementChannel)} style={{ flex: 1, minWidth: 0, padding: 6, fontSize: 12 }}>
+                    {(Object.keys(SETTLEMENT_CHANNEL_LABELS) as SettlementChannel[]).map((c) => (
+                      <option key={c} value={c}>{SETTLEMENT_CHANNEL_LABELS[c]}</option>
+                    ))}
+                  </select>
+                  <input placeholder="Amount" type="number" min={0} value={payAmount} onChange={(e) => setPayAmount(e.target.value)} style={{ width: 90, minWidth: 0, padding: 6, fontSize: 12 }} />
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input placeholder="Reference (optional)" value={payRef} onChange={(e) => setPayRef(e.target.value)} style={{ flex: 1, minWidth: 0, padding: 6, fontSize: 12 }} />
+                  <button type="button" className="btn-primary" disabled={paySaving || !payAmount} onClick={handleRecordPayment} style={{ flexShrink: 0, padding: "0 14px", fontSize: 12 }}>
+                    {paySaving ? "..." : "Add"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
