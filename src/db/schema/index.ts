@@ -11,3 +11,4 @@ export * from "./fbr.js";
 export * from "./stock-movements.js";
 export * from "./stock-cost-layers.js";
 export * from "./deal-parts.js";
+export * from "./settlements.js";
