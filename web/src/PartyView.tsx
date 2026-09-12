@@ -19,6 +19,7 @@ const TXN_TYPE_LABELS: Record<string, string> = {
   purchase_order: "Purchase Order",
   goods_receipt: "Goods Receipt",
   purchase_invoice: "Purchase Invoice",
+  supplier_return: "Supplier Return",
 };
 
 // A receipt/payment_made row's documentType is a synthetic
@@ -193,13 +194,17 @@ export function PartyView() {
                   <span className="muted">Total paid</span>
                   <span>Rs {ledger.totalPaid}</span>
                 </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                  <span className="muted">Total returned</span>
+                  <span>Rs {ledger.totalReturned}</span>
+                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, paddingTop: 4, borderTop: "1px solid var(--line)" }}>
                   <span style={{ fontWeight: 700 }}>Net payable</span>
                   <span style={{ fontWeight: 800 }}>Rs {ledger.netPayable}</span>
                 </div>
               </div>
               <div className="muted" style={{ fontSize: 10.5 }}>
-                Only counts posted Invoices/Purchase Invoices and their recorded payments — a Quotation, Delivery Note, Purchase Order, or Goods Receipt isn't a bill, so none of those affect these figures.
+                Only counts posted Invoices/Purchase Invoices, their recorded payments, and posted Supplier Returns — a Quotation, Delivery Note, Purchase Order, or Goods Receipt isn't a bill, so none of those affect these figures.
               </div>
 
               <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>Transactions</div>
@@ -209,12 +214,13 @@ export function PartyView() {
                   const isReceivableSide = t.kind === "sale" || t.kind === "receipt";
                   const isIncrease = t.kind === "sale" || t.kind === "purchase";
                   const color = isReceivableSide ? "oklch(45% 0.13 150)" : "oklch(55% 0.18 25)";
+                  const hasDocumentDetail = t.kind === "sale" || t.kind === "purchase" || t.kind === "supplier_return";
                   return (
                     <div key={t.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, borderBottom: "1px solid var(--line)", paddingBottom: 6 }}>
                       <div>
                         <div style={{ fontWeight: 700 }}>{describeTransaction(t)}</div>
                         <div className="muted" style={{ fontSize: 11 }}>
-                          {t.kind === "sale" || t.kind === "purchase"
+                          {hasDocumentDetail
                             ? `${t.documentNumber} · ${t.entityName} · ${t.documentDate} · ${t.status}`
                             : `${t.documentNumber} · ${t.documentDate}`}
                         </div>

@@ -323,7 +323,7 @@ export async function deleteSettlement(id: string): Promise<void> {
 
 export interface PartyLedgerTransaction {
   id: string;
-  kind: "sale" | "purchase" | "receipt" | "payment_made";
+  kind: "sale" | "purchase" | "receipt" | "payment_made" | "supplier_return";
   documentType: string;
   documentNumber: string;
   entityName: string;
@@ -336,15 +336,17 @@ export interface PartyLedger {
   party: Party;
   transactions: PartyLedgerTransaction[];
   // Total invoiced (sales) / billed (purchases), posted documents only,
-  // and totalReceived/totalPaid from real settlement records — net
-  // figures are a genuine running balance now (settlements built
-  // 2026-09-12). See parties.ts's own /ledger comment for what's still
-  // excluded (anything that isn't a posted Invoice/Purchase Invoice).
+  // totalReceived/totalPaid from real settlement records, and
+  // totalReturned from posted Supplier Returns (built 2026-09-12) — net
+  // figures are a genuine running balance now. See parties.ts's own
+  // /ledger comment for what's still excluded (anything that isn't a
+  // posted Invoice/Purchase Invoice/Supplier Return).
   totalInvoiced: string;
   totalReceived: string;
   netReceivable: string;
   totalBilled: string;
   totalPaid: string;
+  totalReturned: string;
   netPayable: string;
 }
 
@@ -572,7 +574,7 @@ export interface PurchaseDocumentDetail extends PurchaseDocumentSummary {
   amountPaid: string;
 }
 
-export type PurchaseDocumentType = "purchase_order" | "goods_receipt" | "purchase_invoice";
+export type PurchaseDocumentType = "purchase_order" | "goods_receipt" | "purchase_invoice" | "supplier_return";
 
 export const createPurchaseOrder = (input: {
   legalEntityId: string;
@@ -596,6 +598,14 @@ export const createPurchaseInvoice = (input: {
   sourceGoodsReceiptId: string;
   lines: PurchaseLine[];
 }) => postJson<PurchaseDocumentResult>("/api/purchase-invoices", input);
+
+export const createSupplierReturn = (input: {
+  legalEntityId: string;
+  partyId: string;
+  supplierRef?: string;
+  sourceGoodsReceiptId: string;
+  lines: { controlPartId: string; quantity: number }[];
+}) => postJson<PurchaseDocumentResult>("/api/supplier-returns", input);
 
 export const getPurchaseHistory = (opts?: {
   legalEntityId?: string;

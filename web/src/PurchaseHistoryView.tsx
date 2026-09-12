@@ -22,12 +22,14 @@ const TYPE_LABELS: Record<string, string> = {
   purchase_order: "Purchase Order",
   goods_receipt: "Goods Receipt",
   purchase_invoice: "Purchase Invoice",
+  supplier_return: "Supplier Return",
 };
 
 /**
  * First real way to see the purchase document chain again after creation —
- * the purchasing-side counterpart to Sales History. Post/Unpost only shows
- * for a Goods Receipt (CLAUDE.md section 7): a Purchase Order is
+ * the purchasing-side counterpart to Sales History. Post/Unpost shows for a
+ * Goods Receipt or a Supplier Return (CLAUDE.md section 7) — the two
+ * document types with a real, reversible stock effect; a Purchase Order is
  * informational and a Purchase Invoice is already finalized at creation —
  * see purchases.ts's own comment for why both are blocked server-side too.
  */
@@ -186,11 +188,11 @@ export function PurchaseHistoryView() {
             </button>
           </div>
 
-          {selected.documentType === "goods_receipt" && (
+          {(selected.documentType === "goods_receipt" || selected.documentType === "supplier_return") && (
             <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
               {(selected.status === "draft" || selected.status === "unposted") && (
                 <button type="button" className="btn-primary" style={{ flex: 1, padding: "10px 0", fontSize: 13 }} onClick={handlePost}>
-                  Post (bring stock in)
+                  {selected.documentType === "supplier_return" ? "Post (take stock out)" : "Post (bring stock in)"}
                 </button>
               )}
               {selected.status === "posted" && (

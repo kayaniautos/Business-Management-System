@@ -13,6 +13,7 @@ import { PurchaseOrderView } from "./PurchaseOrderView.js";
 import { GoodsReceiptView } from "./GoodsReceiptView.js";
 import { PurchaseInvoiceView } from "./PurchaseInvoiceView.js";
 import { PurchaseHistoryView } from "./PurchaseHistoryView.js";
+import { SupplierReturnView } from "./SupplierReturnView.js";
 import { CarModelsView } from "./CarModelsView.js";
 import { AppHeader, type View } from "./AppHeader.js";
 import type { LoginResult } from "./api.js";
@@ -69,6 +70,7 @@ export function App() {
       {view === "goods-receipts" && <GoodsReceiptView />}
       {view === "purchase-invoices" && <PurchaseInvoiceView />}
       {view === "purchase-history" && <PurchaseHistoryView />}
+      {view === "supplier-returns" && <SupplierReturnView />}
       {view === "car-models" && <CarModelsView />}
     </div>
   );

@@ -15,6 +15,7 @@ export type View =
   | "goods-receipts"
   | "purchase-invoices"
   | "purchase-history"
+  | "supplier-returns"
   | "car-models";
 
 const VIEW_LABELS: Record<View, string> = {
@@ -31,6 +32,7 @@ const VIEW_LABELS: Record<View, string> = {
   "goods-receipts": "Goods Receipts",
   "purchase-invoices": "Purchase Invoices",
   "purchase-history": "Purchase History",
+  "supplier-returns": "Supplier Returns",
   "car-models": "Car Models",
 };
 
@@ -61,7 +63,7 @@ const MODULES: NavModule[] = [
   {
     key: "purchasing",
     label: "Purchasing",
-    views: ["purchase-orders", "goods-receipts", "purchase-invoices", "purchase-history"],
+    views: ["purchase-orders", "goods-receipts", "purchase-invoices", "supplier-returns", "purchase-history"],
   },
 ];
 
