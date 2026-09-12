@@ -140,18 +140,21 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
    * not a DN, Quotation, Purchase Order, or Goods Receipt, none of which
    * are themselves a bill. `totalReceived`/`totalPaid` (added 2026-09-12
    * once settlements existed — see settlements.ts) are the sum of actual
-   * settlement rows against those same documents, and `netReceivable`/
-   * `netPayable` subtract them — this is now a REAL running balance, not
-   * just "everything ever billed." It can still be wrong in one direction
-   * a client might not expect: a settlement recorded against a document
-   * that predates this feature, or a document type outside the two named
+   * settlement rows against those same documents, and `totalReturned`
+   * (added the same day — see supplier-returns.ts) is the sum of posted
+   * Supplier Return totals, which reduce what's owed the same way a
+   * payment does. `netReceivable`/`netPayable` subtract all of that —
+   * this is now a REAL running balance, not just "everything ever
+   * billed." It can still be wrong in one direction a client might not
+   * expect: a settlement/return recorded against a document that
+   * predates this feature, or a document type outside the ones named
    * above (e.g. money exchanged against a DN before it's ever invoiced)
    * won't be reflected — same "only a real bill counts" scoping as the
    * gross totals.
    */
   const ledgerTransactionSchema = z.object({
     id: z.string(),
-    kind: z.enum(["sale", "purchase", "receipt", "payment_made"]),
+    kind: z.enum(["sale", "purchase", "receipt", "payment_made", "supplier_return"]),
     documentType: z.string(),
     documentNumber: z.string(),
     entityName: z.string(),
@@ -174,6 +177,7 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
             netReceivable: z.string(),
             totalBilled: z.string(),
             totalPaid: z.string(),
+            totalReturned: z.string(),
             netPayable: z.string(),
           }),
           404: z.object({ error: z.string() }),
@@ -248,7 +252,15 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const transactions = [
         ...saleRows.map((r) => ({ ...r, kind: "sale" as const })),
-        ...purchaseRows.map((r) => ({ ...r, kind: "purchase" as const })),
+        // A Supplier Return reduces what's owed, the opposite direction of
+        // every other purchase_documents row — given its own kind so the
+        // frontend doesn't have to sniff documentType to get the sign
+        // right (see PartyView.tsx's isIncrease check).
+        ...purchaseRows.map((r) =>
+          r.documentType === "supplier_return"
+            ? { ...r, kind: "supplier_return" as const }
+            : { ...r, kind: "purchase" as const },
+        ),
         ...receiptRows.map((r) => ({
           id: r.id,
           kind: "receipt" as const,
@@ -293,10 +305,16 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
         .innerJoin(purchaseDocuments, eq(settlements.purchaseDocumentId, purchaseDocuments.id))
         .where(eq(purchaseDocuments.partyId, id));
 
+      const [returnedRow] = await db
+        .select({ total: sql<string>`coalesce(sum(${purchaseDocuments.totalAmount}), 0)` })
+        .from(purchaseDocuments)
+        .where(and(eq(purchaseDocuments.partyId, id), eq(purchaseDocuments.documentType, "supplier_return"), eq(purchaseDocuments.status, "posted")));
+
       const totalInvoiced = invoicedRow?.total ?? "0";
       const totalBilled = billedRow?.total ?? "0";
       const totalReceived = receivedRow?.total ?? "0";
       const totalPaid = paidRow?.total ?? "0";
+      const totalReturned = returnedRow?.total ?? "0";
 
       return {
         party: {
@@ -315,7 +333,8 @@ export const partiesRoutes: FastifyPluginAsync = async (fastify) => {
         netReceivable: (Number(totalInvoiced) - Number(totalReceived)).toFixed(2),
         totalBilled,
         totalPaid,
-        netPayable: (Number(totalBilled) - Number(totalPaid)).toFixed(2),
+        totalReturned,
+        netPayable: (Number(totalBilled) - Number(totalPaid) - Number(totalReturned)).toFixed(2),
       };
     },
   );

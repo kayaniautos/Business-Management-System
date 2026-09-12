@@ -41,6 +41,7 @@ const DOCUMENT_TYPE_CODES: Record<string, string> = {
   purchase_order: "PO",
   goods_receipt: "GRN",
   purchase_invoice: "PINV",
+  supplier_return: "SRET",
 };
 
 export async function assignDocumentNumber(

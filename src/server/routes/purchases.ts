@@ -13,6 +13,7 @@ import {
 } from "../../db/schema/index.js";
 import { applyStockMovementsForPurchaseDocument } from "../services/purchase-stock-movements.js";
 import { applyCostLayersForPurchaseDocument } from "../services/lifo-cost-layers.js";
+import { applyStockMovementsForSupplierReturn, applyCostLayersForSupplierReturn } from "../services/supplier-return-stock.js";
 
 const purchaseDocumentSummarySchema = z.object({
   id: z.string(),
@@ -73,7 +74,7 @@ export const purchasesRoutes: FastifyPluginAsync = async (fastify) => {
       schema: {
         querystring: z.object({
           legalEntityId: z.string().uuid().optional(),
-          documentType: z.enum(["purchase_order", "goods_receipt", "purchase_invoice"]).optional(),
+          documentType: z.enum(["purchase_order", "goods_receipt", "purchase_invoice", "supplier_return"]).optional(),
           q: z.string().optional(),
         }),
         response: { 200: z.array(purchaseDocumentSummarySchema) },
@@ -202,23 +203,34 @@ export const purchasesRoutes: FastifyPluginAsync = async (fastify) => {
   }
 
   /**
-   * Post/Unpost — allowed for "goods_receipt" only. A Purchase Order is
-   * informational, like a Quotation (never posts). A Purchase Invoice is
-   * created already "posted" and stays that way — it's not blocked here
-   * out of laziness, but deliberately: unposting it would have no stock
-   * effect to reverse (the linked Goods Receipt owns that), so allowing
-   * it would create a misleading "unposted invoice" state with nothing
-   * behind it. Real stock effect wired the same way as Delivery Note's
-   * post/unpost: both inside the same transaction as the status change.
+   * Post/Unpost — allowed for "goods_receipt" and "supplier_return" only,
+   * the two document types with a real, reversible stock effect. A
+   * Purchase Order is informational, like a Quotation (never posts). A
+   * Purchase Invoice is created already "posted" and stays that way —
+   * not blocked here out of laziness, but deliberately: unposting it
+   * would have no stock effect to reverse (the linked Goods Receipt owns
+   * that), so allowing it would create a misleading "unposted invoice"
+   * state with nothing behind it.
    */
+  function stockEffectFunctionsFor(documentType: string) {
+    if (documentType === "goods_receipt") {
+      return { movements: applyStockMovementsForPurchaseDocument, layers: applyCostLayersForPurchaseDocument };
+    }
+    if (documentType === "supplier_return") {
+      return { movements: applyStockMovementsForSupplierReturn, layers: applyCostLayersForSupplierReturn };
+    }
+    return null;
+  }
+
   app.post(
     "/:id/post",
     { schema: { params: z.object({ id: z.string().uuid() }), response: { 200: purchaseDocumentSummarySchema, 400: errorResponseSchema, 404: errorResponseSchema } } },
     async (request, reply) => {
       const doc = await db.query.purchaseDocuments.findFirst({ where: eq(purchaseDocuments.id, request.params.id) });
       if (!doc) return reply.code(404).send({ error: "Purchase document not found" });
-      if (doc.documentType !== "goods_receipt") {
-        return reply.code(400).send({ error: "Only a goods receipt can be posted here" });
+      const fns = stockEffectFunctionsFor(doc.documentType);
+      if (!fns) {
+        return reply.code(400).send({ error: "Only a goods receipt or supplier return can be posted here" });
       }
       if (doc.status === "posted") {
         return reply.code(400).send({ error: "Already posted" });
@@ -228,8 +240,8 @@ export const purchasesRoutes: FastifyPluginAsync = async (fastify) => {
           .update(purchaseDocuments)
           .set({ status: "posted", postedAt: new Date() })
           .where(eq(purchaseDocuments.id, doc.id));
-        await applyStockMovementsForPurchaseDocument(tx, doc.id, 1);
-        await applyCostLayersForPurchaseDocument(tx, doc.id, 1);
+        await fns.movements(tx, doc.id, 1);
+        await fns.layers(tx, doc.id, 1);
       });
       return summarizeDocument(doc.id);
     },
@@ -241,16 +253,17 @@ export const purchasesRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const doc = await db.query.purchaseDocuments.findFirst({ where: eq(purchaseDocuments.id, request.params.id) });
       if (!doc) return reply.code(404).send({ error: "Purchase document not found" });
-      if (doc.documentType !== "goods_receipt") {
-        return reply.code(400).send({ error: "Only a goods receipt can be unposted here" });
+      const fns = stockEffectFunctionsFor(doc.documentType);
+      if (!fns) {
+        return reply.code(400).send({ error: "Only a goods receipt or supplier return can be unposted here" });
       }
       if (doc.status !== "posted") {
         return reply.code(400).send({ error: "Only a posted document can be unposted" });
       }
       await db.transaction(async (tx) => {
         await tx.update(purchaseDocuments).set({ status: "unposted" }).where(eq(purchaseDocuments.id, doc.id));
-        await applyStockMovementsForPurchaseDocument(tx, doc.id, -1);
-        await applyCostLayersForPurchaseDocument(tx, doc.id, -1);
+        await fns.movements(tx, doc.id, -1);
+        await fns.layers(tx, doc.id, -1);
       });
       return summarizeDocument(doc.id);
     },
