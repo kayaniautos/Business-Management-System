@@ -7,6 +7,7 @@ import {
   salesDocuments,
   salesDocumentLines,
   salesDocumentDiscounts,
+  salesDocumentLinks,
   legalEntities,
   controlParts,
   dealParts,
@@ -133,6 +134,11 @@ const salesDocumentDetailSchema = salesDocumentSummarySchema.extend({
     }),
   ),
   amountPaid: z.string(),
+  // Delivery note(s) this invoice was raised from (invoices.ts), if any —
+  // always empty for a checkout invoice. cogsAmount above is "0.00" for
+  // one of these, on purpose: the real COGS was already recorded against
+  // the source DN(s) when THEY were posted, not against this document.
+  sourceDeliveryNotes: z.array(z.string()),
 });
 
 /**
@@ -285,6 +291,12 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const amountPaid = settlementRows.reduce((sum, s) => sum + Number(s.amount), 0);
 
+      const sourceDnRows = await db
+        .select({ documentNumber: salesDocuments.documentNumber })
+        .from(salesDocumentLinks)
+        .innerJoin(salesDocuments, eq(salesDocuments.id, salesDocumentLinks.fromDocumentId))
+        .where(and(eq(salesDocumentLinks.toDocumentId, id), eq(salesDocuments.documentType, "delivery_note")));
+
       return {
         ...header,
         lines: lineRows,
@@ -292,6 +304,7 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
         cogsAmount: cogsRow?.total ?? "0",
         settlements: settlementRows,
         amountPaid: amountPaid.toFixed(2),
+        sourceDeliveryNotes: sourceDnRows.map((r) => r.documentNumber),
       };
     },
   );
@@ -349,6 +362,18 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
       if (!doc) return reply.code(404).send({ error: "Document not found" });
       if (doc.status !== "posted") {
         return reply.code(400).send({ error: "Only a posted document can be unposted" });
+      }
+      if (doc.documentType === "invoice") {
+        const [sourceDn] = await db
+          .select({ documentNumber: salesDocuments.documentNumber })
+          .from(salesDocumentLinks)
+          .innerJoin(salesDocuments, eq(salesDocuments.id, salesDocumentLinks.fromDocumentId))
+          .where(and(eq(salesDocumentLinks.toDocumentId, doc.id), eq(salesDocuments.documentType, "delivery_note")));
+        if (sourceDn) {
+          return reply.code(400).send({
+            error: `This invoice was raised from ${sourceDn.documentNumber} and has no stock effect of its own to reverse — unpost the delivery note instead.`,
+          });
+        }
       }
       await db.transaction(async (tx) => {
         await tx.update(salesDocuments).set({ status: "unposted" }).where(eq(salesDocuments.id, doc.id));
