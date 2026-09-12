@@ -5,6 +5,80 @@ summary; this file holds the history and the "why." Newest entries at the top.
 
 ---
 
+## 2026-09-12 — Built settlement channels, scoped narrower than the Vouchers module
+
+**What triggered this:** presented as one of four next-feature options
+(alternatives: supplier returns, a margin alert) after the Party
+Statement shipped the day before, and picked as the recommended one
+since it directly closed a gap that screen itself had just flagged —
+"total invoiced/billed" couldn't be a real balance without a real
+payment record to subtract from it.
+
+**Decision:** a `settlements` table tying one payment directly to one
+sales Invoice or Purchase Invoice — channel, amount, date, an optional
+reference note — not the full Vouchers module (CLAUDE.md section 8,
+still "not built yet").
+
+**Why not build the full Vouchers module instead:** CLAUDE.md 5.10 names
+the four channels (Cash/EasyPaisa/JazzCash/Bank Transfer) but the
+client's own notes describe Vouchers as free-floating documents with
+"two types" (apparently Sales Tax/Income Tax variants) that themselves
+need a print format and document number — genuinely unconfirmed
+specifics, not something to guess at. Tying a settlement directly to the
+one document it pays for sidesteps all of that ambiguity while still
+closing the actual, concrete gap: a document's paid/unpaid status and a
+party's balance. If a real Voucher module is built later, these
+settlement rows are a reasonable foundation to build on, not something
+that will need to be thrown away.
+
+**Key design choice — resolves the "split across channels" open
+question by not needing an answer.** CLAUDE.md 5.10 explicitly flagged
+"[unclear — confirm] whether a single sale can split across multiple
+channels." Rather than asking the client or guessing, the schema allows
+any number of settlement rows per document, each with its own channel —
+a split payment (half cash, half EasyPaisa) is just two rows, not one
+row needing a more complex multi-channel shape.
+
+**Key design choice — no chart-of-accounts posting.** CLAUDE.md 5.10
+says each channel should post "to its own chart-of-accounts account,"
+but the accounting/journal module (Phase 4) doesn't exist — there's
+nowhere real to post to yet, and inventing a posting mechanism ahead of
+that module risks building something that conflicts with its eventual
+design. `channel` is a plain label for now, same "don't build ahead of
+the accounting module" reasoning already applied to Purchase Invoice and
+checkout.
+
+**Key design choice — settlements only attach to a POSTED bill.** A
+Purchase Order, Goods Receipt, Quotation, or Delivery Note isn't itself
+a financial commitment (same reasoning already used for the Party
+Statement's `totalInvoiced`/`totalBilled`), so recording a "payment"
+against one wouldn't mean anything real. Only a posted Invoice or posted
+Purchase Invoice can have a settlement recorded against it.
+
+**Real bug found and fixed while testing**: the payment-entry row
+(channel dropdown, amount, reference, Add button all on one line)
+overflowed the ~360px-wide detail panel, forcing a horizontal scrollbar
+to reach the Add button. Caught by checking `scrollWidth > clientWidth`
+on the page after using the form, not by eyeballing — the visual overflow
+wasn't dramatic enough to be obvious in a screenshot. Fixed by stacking
+it into two rows; re-checked the same way afterward to confirm zero
+elements anywhere on the page have horizontal overflow.
+
+**Verified end to end**: recorded a real partial payment (Rs 400 of
+Rs 600, EasyPaisa) against a real customer invoice and confirmed the
+Party Statement's net receivable dropped to exactly Rs 200; added the
+remaining Rs 200 via Cash through the actual UI form and confirmed the
+balance reached exactly zero; separately recorded a full Rs 1820 Bank
+Transfer payment (with a reference note) against a real supplier's
+Purchase Invoice and confirmed that supplier's net payable reached
+exactly zero and the payment appeared correctly in the transaction feed
+as a reducing entry.
+
+**Source:** Mehmoon, 2026-09-12 (picked from a presented list of
+next-feature options).
+
+---
+
 ## 2026-09-11 — Built a Party ledger/statement view, explicitly not calling it a "balance"
 
 **What triggered this:** presented as one of four next-feature options
