@@ -3,6 +3,7 @@ import { LoginView } from "./LoginView.js";
 import { PosView } from "./PosView.js";
 import { QuotationView } from "./QuotationView.js";
 import { DeliveryNoteView } from "./DeliveryNoteView.js";
+import { InvoiceFromDeliveryView } from "./InvoiceFromDeliveryView.js";
 import { InventoryView } from "./InventoryView.js";
 import { StockAdjustmentView } from "./StockAdjustmentView.js";
 import { DealPartView } from "./DealPartView.js";
@@ -60,6 +61,7 @@ export function App() {
       {view === "pos" && <PosView user={user} />}
       {view === "quotations" && <QuotationView />}
       {view === "delivery-notes" && <DeliveryNoteView />}
+      {view === "invoice-from-delivery" && <InvoiceFromDeliveryView />}
       {view === "inventory" && <InventoryView />}
       {view === "stock-adjustments" && <StockAdjustmentView />}
       {view === "deal-parts" && <DealPartView />}

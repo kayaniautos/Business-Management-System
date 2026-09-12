@@ -170,13 +170,16 @@ export function SalesHistoryView() {
               <div className="muted" style={{ fontSize: 12 }}>
                 {selected.entityName} &middot; {selected.partyName ?? "Walk-in customer"} &middot; {selected.documentDate}
               </div>
+              {selected.sourceDeliveryNotes.length > 0 && (
+                <div className="muted" style={{ fontSize: 11.5 }}>Raised from: {selected.sourceDeliveryNotes.join(", ")}</div>
+              )}
             </div>
             <button type="button" onClick={() => setSelected(null)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18, minHeight: 44, minWidth: 44 }}>
               &times;
             </button>
           </div>
 
-          {selected.documentType !== "quotation" && (
+          {selected.documentType !== "quotation" && selected.sourceDeliveryNotes.length === 0 && (
             <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
               {(selected.status === "draft" || selected.status === "unposted") && (
                 <button type="button" className="btn-primary" style={{ flex: 1, padding: "10px 0", fontSize: 13 }} onClick={handlePost}>
@@ -201,6 +204,11 @@ export function SalesHistoryView() {
                   Unpost
                 </button>
               )}
+            </div>
+          )}
+          {selected.sourceDeliveryNotes.length > 0 && (
+            <div className="muted" style={{ marginTop: 12, fontSize: 11.5 }}>
+              Already posted — its stock effect belongs to the delivery note(s) above, not this invoice.
             </div>
           )}
 
@@ -234,7 +242,7 @@ export function SalesHistoryView() {
             <span>Rs {selected.totalAmount}</span>
           </div>
 
-          {selected.status === "posted" && selected.documentType !== "quotation" && (
+          {selected.status === "posted" && selected.documentType !== "quotation" && selected.sourceDeliveryNotes.length === 0 && (
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 4 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                 <span className="muted">Cost of goods sold (LIFO)</span>
@@ -244,6 +252,11 @@ export function SalesHistoryView() {
                 <span className="muted">Gross margin</span>
                 <span style={{ fontWeight: 700 }}>Rs {(Number(selected.totalAmount) - Number(selected.cogsAmount)).toFixed(2)}</span>
               </div>
+            </div>
+          )}
+          {selected.status === "posted" && selected.sourceDeliveryNotes.length > 0 && (
+            <div className="muted" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", fontSize: 11.5 }}>
+              Cost of goods sold and margin were recorded against {selected.sourceDeliveryNotes.join(", ")} when posted, not shown again here.
             </div>
           )}
 

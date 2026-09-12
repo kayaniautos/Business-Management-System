@@ -391,6 +391,10 @@ export interface SalesDocumentDetail extends SalesDocumentSummary {
   // Invoice, since settlements.ts rejects every other document type.
   settlements: Settlement[];
   amountPaid: string;
+  // Delivery note(s) this Invoice was raised from (invoices.ts) — empty
+  // for a checkout invoice. cogsAmount is "0.00" for one of these on
+  // purpose: the real COGS was recorded against the source DN(s) instead.
+  sourceDeliveryNotes: string[];
 }
 
 export type SalesDocumentType = "quotation" | "delivery_note" | "invoice";
@@ -438,6 +442,30 @@ export interface DeliveryNoteInput {
 
 export const createDeliveryNote = (input: DeliveryNoteInput) =>
   postJson<CheckoutResult>("/api/delivery-notes", input);
+
+export interface UninvoicedDeliveryNote {
+  id: string;
+  documentNumber: string;
+  documentDate: string;
+  totalAmount: string;
+}
+
+export const getUninvoicedDeliveryNotes = (opts: { legalEntityId: string; partyId?: string }) => {
+  const params = new URLSearchParams({ legalEntityId: opts.legalEntityId });
+  if (opts.partyId) params.set("partyId", opts.partyId);
+  return getJson<UninvoicedDeliveryNote[]>(`/api/invoices/uninvoiced-delivery-notes?${params.toString()}`);
+};
+
+export interface InvoiceFromDeliveryNotesResult {
+  id: string;
+  documentNumber: string;
+  subtotalAmount: string;
+  totalAmount: string;
+  sourceDeliveryNoteNumbers: string[];
+}
+
+export const createInvoiceFromDeliveryNotes = (sourceDeliveryNoteIds: string[]) =>
+  postJson<InvoiceFromDeliveryNotesResult>("/api/invoices", { sourceDeliveryNoteIds });
 
 export interface StockAdjustment {
   id: string;
