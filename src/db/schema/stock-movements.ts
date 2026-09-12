@@ -37,11 +37,20 @@ import { purchaseDocuments } from "./purchase-documents.js";
  * nothing in the client's notes confirms whether backorder/negative
  * stock should be allowed or hard-blocked, so this doesn't invent a
  * business rule either way; the ledger just records whatever happens.
+ *
+ * `movementType` gained "supplier_return" 2026-09-12 — written by a
+ * Supplier Return document's post/unpost (src/server/services/
+ * supplier-return-stock.ts), always a decrease on post (goods physically
+ * leaving back to the supplier) and a reversal on unpost. Traced via the
+ * same `purchaseDocumentId` column, pointing at the return document
+ * itself (not the original Goods Receipt it's returning against — that
+ * link lives in `purchase_document_links` instead).
  */
 export const stockMovementTypeEnum = pgEnum("stock_movement_type", [
   "adjustment",
   "sale",
   "purchase",
+  "supplier_return",
 ]);
 
 export const stockMovements = pgTable("stock_movements", {
@@ -59,11 +68,12 @@ export const stockMovements = pgTable("stock_movements", {
   // no staff-written comment, it's traced back to its document instead.
   reasonComment: text("reason_comment"),
   // Traces a "sale" movement back to the Invoice/DN that caused it — null
-  // for "adjustment"/"purchase" rows.
+  // for every other movement type.
   salesDocumentId: uuid("sales_document_id").references(() => salesDocuments.id),
-  // Traces a "purchase" movement back to the Goods Receipt that caused it
-  // — null for every other movement type. Separate nullable column rather
-  // than reusing salesDocumentId, since the two reference different tables.
+  // Traces a "purchase" movement back to the Goods Receipt, or a
+  // "supplier_return" movement back to the Return document — null for
+  // every other movement type. Separate nullable column rather than
+  // reusing salesDocumentId, since the two reference different tables.
   purchaseDocumentId: uuid("purchase_document_id").references(() => purchaseDocuments.id),
   ...timestampColumns,
   createdBy: uuid("created_by").references(() => users.id),

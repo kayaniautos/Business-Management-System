@@ -37,8 +37,6 @@ import { controlParts } from "./inventory.js";
  *   to the chart of accounts either, so this isn't a purchasing-specific
  *   gap. A Purchase Invoice here records the transaction and its total,
  *   nothing more.
- * - Supplier returns (handover doc 6.3: "a ledger entry linked back to the
- *   original purchase voucher") — needs the same ledger module first.
  * - Merging MULTIPLE goods receipts onto one Purchase Invoice (handover
  *   doc 6.3 explicitly asks for this) — first pass only supports invoicing
  *   from ONE goods receipt at a time, matching this project's own
@@ -48,15 +46,29 @@ import { controlParts } from "./inventory.js";
  *   being good enough in practice.
  * - Tax computation on the purchase side — `taxTotal` exists to hold a
  *   future result, always 0 for now, same reasoning as sales_documents.
+ *
+ * `"supplier_return"` added 2026-09-12 (handover doc 6.3: "a ledger entry
+ * linked back to the original purchase voucher, not a free-floating
+ * credit note") — reuses this same header/lines/links trio rather than a
+ * separate table, since a return shares the exact same shape (supplier,
+ * entity, lines of controlPartId/quantity/unitCost, a real stock effect
+ * needing post/unpost). The "linked back to the original voucher" part is
+ * literal: a return always requires a `purchase_document_links` row back
+ * to the specific posted Goods Receipt it's returning against — see
+ * src/server/routes/supplier-returns.ts. Still NOT a ledger entry in the
+ * accounting sense (no chart-of-accounts posting) — the ledger module
+ * doesn't exist yet, same reasoning as the rest of this file.
  */
 export const purchaseDocumentTypeEnum = pgEnum("purchase_document_type", [
   "purchase_order",
   "goods_receipt",
   "purchase_invoice",
+  "supplier_return",
 ]);
 
 /**
- * Post/Unpost (CLAUDE.md 5.9) applies to Goods Receipt only here — a
+ * Post/Unpost (CLAUDE.md 5.9) applies to Goods Receipt and Supplier
+ * Return — both have a real stock effect that needs to be reversible. A
  * Purchase Order is informational (nothing has arrived yet, no stock
  * effect) and a Purchase Invoice is created already "posted" (the
  * supplier's bill arriving IS the finalizing event) with no further
