@@ -58,6 +58,61 @@ line that doesn't exist anywhere else in this schema.
 
 ---
 
+## 2026-09-13 — Built the margin alert as one global band, evaluated at post time not entry time
+
+**What triggered this:** presented as one of the next-feature options,
+picked as the recommended one — it was blocked before on "no cost
+figure exists to compare against," and the LIFO/COGS engine (built
+2026-09-11) removed that blocker.
+
+**Decision:** a single app-wide minimum-margin percentage
+(`margin_settings`, one editable row), not per-category or per-item.
+CLAUDE.md section 11 explicitly left the band's scope open — this picks
+the only version the client's own notes actually confirm exists ("a
+configured band"), and treats the narrower per-category/per-item
+reading as an additive change for later, not something to guess at now.
+
+**Key design choice — margin is evaluated when a document's stock
+actually moves, not when its lines are first typed in.** A checkout
+Invoice posts immediately, so those are the same moment. A Delivery
+Note doesn't — it's created `draft`, then explicitly posted later,
+possibly after new stock (and a new cost) has come in. Evaluating at
+POST time means the flag reflects the real situation at the moment of
+the real sale, mirroring exactly when LIFO cost-layer consumption
+already happens for the same document. A Quotation is never evaluated
+at all — CLAUDE.md 5.10 already calls it "zero accounting impact," so
+there's no real sale yet to have a margin.
+
+**What "cost" means here, and why it's an approximation:** `unitCostAtSale`
+is the front-of-LIFO-queue cost at the moment of evaluation — the same
+figure already shown elsewhere as "Last received cost (LIFO)" — not the
+specific cost layer this exact line will end up consuming. True per-line
+real-cost attribution doesn't exist anywhere in this codebase yet (the
+document-level `cogsAmount` field already flags this same gap). Building
+full per-line LIFO traceability just to make this one soft warning more
+precise would have been a bigger change than the feature itself; the
+approximation is disclosed in the schema comment, not hidden.
+
+**Why no approval step exists before a flagged sale proceeds:** CLAUDE.md
+5.10 confirms "soft warning... not a hard block" and "a persistent
+highlight... a margin-override log report should exist" — both are
+after-the-fact visibility, not a before-it-happens gate. Whether an
+override needs approval is a genuinely separate, still-unconfirmed
+question (tangled up with the broader open Authority Levels
+conversation, CLAUDE.md 5.8) — inventing a sign-off flow for margin
+specifically, ahead of that conversation, would be building on a guess.
+
+**Live hint vs. authoritative flag, deliberately two different things:**
+POS and Delivery Note's line-entry screens show an inline "Low margin"
+warning as staff type a price, computed client-side from a search
+result's `currentUnitCost` — purely a courtesy heads-up. The actual,
+stored flag is always recomputed server-side, fresh, at the real moment
+of posting. The two can disagree (stock/cost can change between adding a
+line and posting the document) and that's fine — the live hint was never
+meant to be authoritative.
+
+---
+
 ## 2026-09-12 — Built supplier returns, reusing the purchase-document tables instead of a new one
 
 **What triggered this:** presented as one of the next-feature options
