@@ -36,8 +36,13 @@ export const accountCategoryEnum = pgEnum("account_category", [
  * which nests bank accounts one level under Current Assets).
  *
  * [unclear — confirm] "Chart of accounts coding should be expansion-ready"
- * per CLAUDE.md design notes, but no actual numbering scheme was provided.
- * `code` is left nullable/free-text until that scheme is confirmed.
+ * per CLAUDE.md design notes, but no actual numbering scheme was provided
+ * by the client. A proposed scheme was applied 2026-09-13 via the
+ * `db:seed:coa-codes` script (`src/db/seed-coa-codes.ts`) — one 1000-wide
+ * block per category, accounts spaced ten apart — but this is Mehmoon's
+ * own proposal, not a client-confirmed convention. `code` stays
+ * nullable/free-text (not a fixed-width/structured column) since the
+ * scheme itself may still change.
  *
  * [unclear — confirm] CLAUDE.md design notes also say "Report classification
  * should be based on a Party Form" — no Party Form details exist yet

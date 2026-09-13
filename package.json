@@ -13,6 +13,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:dev": "tsx src/db/seed-dev-data.ts",
     "db:seed:car-makes": "tsx src/db/seed-car-makes.ts",
+    "db:seed:coa-codes": "tsx src/db/seed-coa-codes.ts",
     "typecheck": "tsc --noEmit",
     "dev:server": "tsx watch src/server/index.ts",
     "dev:web": "vite",
