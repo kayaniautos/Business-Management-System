@@ -58,6 +58,46 @@ line that doesn't exist anywhere else in this schema.
 
 ---
 
+## 2026-09-13 — Merged multiple Goods Receipts onto one Purchase Invoice, no schema change
+
+**What triggered this:** presented as a next-feature option right after
+the margin alert shipped — the purchasing-side mirror of the sales
+side's Invoice-from-Delivery-Note(s), and the last item still on the
+original Purchasing pass's "deliberately not built" list.
+
+**Decision:** extend `POST /api/purchase-invoices` to accept
+`sourceGoodsReceiptIds: string[]` instead of a single id. No schema
+change — `purchase_document_links` was already many-to-many, same as
+the sales side's `sales_document_links`.
+
+**Where this deliberately does NOT mirror the sales-side feature:** the
+sales side merges two DN lines into one invoice line when the part and
+price match. Purchasing does not — nothing in the handover doc asks for
+merging same-part lines across receipts, only for combining several
+receipts' bills onto one invoice, and a Purchase Invoice's whole reason
+for existing is that each line's cost is independently re-enterable
+(the real supplier bill vs. the receiving-time estimate can differ) —
+collapsing lines together would make correcting one receipt's cost
+without touching another's harder, not easier.
+
+**A real, closed gap as a side effect, not a separate fix:** before this
+change, nothing stopped the same Goods Receipt from being billed twice —
+it was never noticed because only one receipt could ever be selected at
+a time, so nobody had a reason to pick the same one again. Letting
+several be selected together made accidental double-billing a real risk
+worth guarding against, so the same "already invoiced" check built for
+DNs (via the link table) was added here too.
+
+**Why no new unpost guard was needed** (unlike the sales side, which
+needed one for Invoice-from-DN): a Purchase Invoice already had no
+Post/Unpost controls at all — `purchases.ts`'s dispatcher only ever
+allowed a Goods Receipt or Supplier Return through, since a Purchase
+Invoice writes no stock movement of its own. The sales-side equivalent
+(a checkout Invoice) DOES sometimes own a real stock movement, which is
+exactly why that side needed a conditional guard and this side didn't.
+
+---
+
 ## 2026-09-13 — Built the margin alert as one global band, evaluated at post time not entry time
 
 **What triggered this:** presented as one of the next-feature options,
