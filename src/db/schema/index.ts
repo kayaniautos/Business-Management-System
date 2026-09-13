@@ -12,3 +12,4 @@ export * from "./stock-movements.js";
 export * from "./stock-cost-layers.js";
 export * from "./deal-parts.js";
 export * from "./settlements.js";
+export * from "./margin-settings.js";

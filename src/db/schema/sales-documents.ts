@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   integer,
   numeric,
@@ -195,6 +196,20 @@ export const salesDocumentLines = pgTable("sales_document_lines", {
   lineTaxAmount: numeric("line_tax_amount", { precision: 14, scale: 2 })
     .notNull()
     .default("0"),
+  // Margin alert (CLAUDE.md 5.10), written by services/margin.ts at the
+  // moment this line's stock actually moves — checkout (immediate),
+  // Delivery Note post, or Invoice-from-DN creation — not at Quotation
+  // creation, since a Quotation never posts and has "zero accounting
+  // impact." unitCostAtSale is the front-of-LIFO-queue cost snapshot at
+  // that moment (services/lifo-cost-layers.ts), the same figure already
+  // shown elsewhere as "Last received cost (LIFO)" — NOT the actual cost
+  // this specific line ends up consuming (full per-line real-cost
+  // attribution doesn't exist anywhere in this codebase yet; see
+  // sales.ts's own cogsAmount comment). Both null/false for a Deal Part
+  // line (margin evaluation isn't built for bundles yet) or a part with
+  // no cost layer at all.
+  unitCostAtSale: numeric("unit_cost_at_sale", { precision: 14, scale: 2 }),
+  belowMarginBand: boolean("below_margin_band").notNull().default(false),
   ...timestampColumns,
   createdBy: uuid("created_by").references(() => users.id),
   updatedBy: uuid("updated_by").references(() => users.id),
