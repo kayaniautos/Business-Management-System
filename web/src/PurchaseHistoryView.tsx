@@ -182,6 +182,9 @@ export function PurchaseHistoryView() {
               {selected.supplierRef && (
                 <div className="muted" style={{ fontSize: 11.5 }}>Supplier ref: {selected.supplierRef}</div>
               )}
+              {selected.sourceGoodsReceipts.length > 0 && (
+                <div className="muted" style={{ fontSize: 11.5 }}>Raised from: {selected.sourceGoodsReceipts.join(", ")}</div>
+              )}
             </div>
             <button type="button" onClick={() => setSelected(null)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18, minHeight: 44, minWidth: 44 }}>
               &times;

@@ -606,6 +606,9 @@ export interface PurchaseDocumentDetail extends PurchaseDocumentSummary {
   // Purchase Invoice, since settlements.ts rejects every other type.
   settlements: Settlement[];
   amountPaid: string;
+  // Goods receipt(s) a Purchase Invoice was raised from — empty for
+  // every other document type.
+  sourceGoodsReceipts: string[];
 }
 
 export type PurchaseDocumentType = "purchase_order" | "goods_receipt" | "purchase_invoice" | "supplier_return";
@@ -629,9 +632,21 @@ export const createPurchaseInvoice = (input: {
   legalEntityId: string;
   partyId: string;
   supplierRef?: string;
-  sourceGoodsReceiptId: string;
+  sourceGoodsReceiptIds: string[];
   lines: PurchaseLine[];
 }) => postJson<PurchaseDocumentResult>("/api/purchase-invoices", input);
+
+export interface UninvoicedGoodsReceipt {
+  id: string;
+  documentNumber: string;
+  documentDate: string;
+  totalAmount: string;
+}
+
+export const getUninvoicedGoodsReceipts = (opts: { legalEntityId: string; partyId: string }) => {
+  const params = new URLSearchParams({ legalEntityId: opts.legalEntityId, partyId: opts.partyId });
+  return getJson<UninvoicedGoodsReceipt[]>(`/api/purchase-invoices/uninvoiced-goods-receipts?${params.toString()}`);
+};
 
 export const createSupplierReturn = (input: {
   legalEntityId: string;
