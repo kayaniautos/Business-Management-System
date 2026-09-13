@@ -11,6 +11,7 @@ import {
   carModels,
   dealParts,
 } from "../../db/schema/index.js";
+import { currentUnitCostsForParts } from "../services/lifo-cost-layers.js";
 
 const searchQuerySchema = z
   .object({
@@ -43,6 +44,10 @@ const searchResultSchema = z.array(
     markerName: z.string().nullable(),
     fitment: z.array(z.object({ make: z.string(), model: z.string() })),
     isDealPart: z.boolean(),
+    // Front-of-LIFO-queue cost (services/lifo-cost-layers.ts), for the
+    // margin-alert live hint (CLAUDE.md 5.10) shown while staff enter a
+    // price — null for a Deal Part result or a part with no cost layer.
+    currentUnitCost: z.string().nullable(),
   }),
 );
 
@@ -140,10 +145,13 @@ export const partsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      const costsByPartId = await currentUnitCostsForParts(db, matches.map((m) => m.id));
+
       const partResults = matches.map((m) => ({
         ...m,
         fitment: fitmentByPartId.get(m.id) ?? [],
         isDealPart: false,
+        currentUnitCost: costsByPartId.get(m.id) ?? null,
       }));
 
       if (!includeDealParts || !pattern) return partResults;
@@ -162,6 +170,7 @@ export const partsRoutes: FastifyPluginAsync = async (fastify) => {
         markerName: null,
         fitment: [],
         isDealPart: true,
+        currentUnitCost: null,
       }));
 
       return [...partResults, ...dealResults];

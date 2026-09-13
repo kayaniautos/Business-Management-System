@@ -23,6 +23,8 @@ import { purchasesRoutes } from "./routes/purchases.js";
 import { settlementsRoutes } from "./routes/settlements.js";
 import { supplierReturnsRoutes } from "./routes/supplier-returns.js";
 import { invoicesRoutes } from "./routes/invoices.js";
+import { settingsRoutes } from "./routes/settings.js";
+import { reportsRoutes } from "./routes/reports.js";
 
 /**
  * First-pass Fastify backend for the vertical slice: real login against the
@@ -63,6 +65,8 @@ export function buildApp() {
   app.register(settlementsRoutes, { prefix: "/api/settlements" });
   app.register(supplierReturnsRoutes, { prefix: "/api/supplier-returns" });
   app.register(invoicesRoutes, { prefix: "/api/invoices" });
+  app.register(settingsRoutes, { prefix: "/api/settings" });
+  app.register(reportsRoutes, { prefix: "/api/reports" });
 
   app.get("/api/health", async () => ({ ok: true }));
 

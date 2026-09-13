@@ -1,9 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
-import { controlParts, stockCostLayers, stockMovements } from "../../db/schema/index.js";
+import { controlParts, stockMovements } from "../../db/schema/index.js";
+import { currentUnitCostsForParts } from "../services/lifo-cost-layers.js";
 
 const errorResponseSchema = z.object({ error: z.string() });
 
@@ -20,13 +21,8 @@ const quantityResponseSchema = z.object({
 });
 
 async function currentLifoUnitCost(controlPartId: string): Promise<string | null> {
-  const [layer] = await db
-    .select({ unitCost: stockCostLayers.unitCost })
-    .from(stockCostLayers)
-    .where(and(eq(stockCostLayers.controlPartId, controlPartId), gt(stockCostLayers.quantityRemaining, 0)))
-    .orderBy(desc(stockCostLayers.id))
-    .limit(1);
-  return layer?.unitCost ?? null;
+  const costs = await currentUnitCostsForParts(db, [controlPartId]);
+  return costs.get(controlPartId) ?? null;
 }
 
 const adjustmentResponseSchema = z.object({

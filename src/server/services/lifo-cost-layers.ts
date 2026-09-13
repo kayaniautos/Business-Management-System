@@ -131,6 +131,39 @@ export async function consumeLifoForSaleMovement(
 }
 
 /**
+ * The unit cost of the LIFO layer that would be consumed NEXT for each
+ * given part (the most recently received batch still holding stock) —
+ * not an average cost. A part with no entry in the returned map has no
+ * cost layer at all yet (nothing has ever been received through Goods
+ * Receipt, or its stock predates that feature).
+ *
+ * Batched (one query for many parts) rather than one query per part,
+ * since both call sites — margin evaluation (services/margin.ts) and
+ * search results (routes/parts.ts) — deal with several parts at once.
+ * `stock-adjustments.ts`'s own single-part lookup delegates to this too,
+ * so there's exactly one query shape for "front of LIFO queue," not two
+ * copies that could drift.
+ */
+export async function currentUnitCostsForParts(
+  client: DbOrTx,
+  controlPartIds: string[],
+): Promise<Map<string, string>> {
+  const costs = new Map<string, string>();
+  if (controlPartIds.length === 0) return costs;
+
+  const layers = await client
+    .select({ controlPartId: stockCostLayers.controlPartId, unitCost: stockCostLayers.unitCost })
+    .from(stockCostLayers)
+    .where(and(inArray(stockCostLayers.controlPartId, controlPartIds), gt(stockCostLayers.quantityRemaining, 0)))
+    .orderBy(desc(stockCostLayers.id));
+
+  for (const layer of layers) {
+    if (!costs.has(layer.controlPartId)) costs.set(layer.controlPartId, layer.unitCost);
+  }
+  return costs;
+}
+
+/**
  * Reverses the LIFO consumption tied to a sales document's ORIGINAL
  * decrement movements (the negative "sale" rows written when it was
  * posted) — restoring each consumed layer's quantityRemaining and

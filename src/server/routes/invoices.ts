@@ -16,6 +16,7 @@ import {
   computeAndValidateTotals,
   SalesDocumentValidationError,
 } from "../services/sales-document-helpers.js";
+import { evaluateAndFlagMarginForDocument } from "../services/margin.js";
 
 const errorResponseSchema = z.object({ error: z.string() });
 
@@ -267,6 +268,7 @@ export const invoicesRoutes: FastifyPluginAsync = async (fastify) => {
           // Deliberately NOT calling applyStockMovementsForDocument here —
           // the source DN(s) already moved stock when they were posted.
           // See the file-header comment.
+          await evaluateAndFlagMarginForDocument(tx, doc.id);
 
           return doc;
         });

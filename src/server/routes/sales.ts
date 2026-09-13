@@ -25,6 +25,7 @@ import {
   SalesDocumentValidationError,
 } from "../services/sales-document-helpers.js";
 import { applyStockMovementsForDocument } from "../services/stock-movements.js";
+import { evaluateAndFlagMarginForDocument } from "../services/margin.js";
 
 const checkoutLineSchema = z
   .object({
@@ -108,6 +109,10 @@ const salesDocumentDetailSchema = salesDocumentSummarySchema.extend({
       quantity: z.number(),
       unitGrossPrice: z.string(),
       lineGrossAmount: z.string(),
+      // Margin alert (CLAUDE.md 5.10), written by services/margin.ts when
+      // this line's stock actually moves — always false for a Quotation
+      // line (never evaluated) or a Deal Part line (not built).
+      belowMarginBand: z.boolean(),
     }),
   ),
   discounts: z.array(z.object({ label: z.string(), amount: z.string() })),
@@ -259,6 +264,7 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
           quantity: salesDocumentLines.quantity,
           unitGrossPrice: salesDocumentLines.unitGrossPrice,
           lineGrossAmount: salesDocumentLines.lineGrossAmount,
+          belowMarginBand: salesDocumentLines.belowMarginBand,
         })
         .from(salesDocumentLines)
         .leftJoin(controlParts, eq(salesDocumentLines.controlPartId, controlParts.id))
@@ -349,6 +355,7 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
           .set({ status: "posted", postedAt: new Date() })
           .where(eq(salesDocuments.id, doc.id));
         await applyStockMovementsForDocument(tx, doc.id, -1);
+        await evaluateAndFlagMarginForDocument(tx, doc.id);
       });
       return summarizeDocument(doc.id);
     },
@@ -479,6 +486,7 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
         // Checkout posts immediately, so its stock effect happens now too
         // — DN/Invoice-via-/post instead apply this when actually posted.
         await applyStockMovementsForDocument(tx, doc.id, -1);
+        await evaluateAndFlagMarginForDocument(tx, doc.id);
 
         return doc;
       });
