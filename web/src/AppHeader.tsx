@@ -6,6 +6,7 @@ export type View =
   | "quotations"
   | "delivery-notes"
   | "invoice-from-delivery"
+  | "margin-overrides"
   | "inventory"
   | "parties"
   | "sales-history"
@@ -24,6 +25,7 @@ const VIEW_LABELS: Record<View, string> = {
   quotations: "Quotations",
   "delivery-notes": "Delivery Notes",
   "invoice-from-delivery": "Raise Invoice (from DN)",
+  "margin-overrides": "Margin Overrides",
   inventory: "Inventory",
   parties: "Parties",
   "sales-history": "Sales History (Ctrl+H)",
@@ -60,7 +62,7 @@ interface NavModule {
 }
 
 const MODULES: NavModule[] = [
-  { key: "sales", label: "Sales", views: ["quotations", "delivery-notes", "invoice-from-delivery", "sales-history"] },
+  { key: "sales", label: "Sales", views: ["quotations", "delivery-notes", "invoice-from-delivery", "sales-history", "margin-overrides"] },
   { key: "inventory", label: "Inventory", views: ["inventory", "stock-adjustments", "deal-parts", "car-models"] },
   {
     key: "purchasing",

@@ -214,12 +214,27 @@ export function SalesHistoryView() {
 
           <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
             {selected.lines.map((line) => (
-              <div key={line.lineNumber} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, borderBottom: "1px solid var(--line)", paddingBottom: 8 }}>
+              <div
+                key={line.lineNumber}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 13,
+                  borderBottom: "1px solid var(--line)",
+                  paddingBottom: 8,
+                  background: line.belowMarginBand ? "oklch(96% 0.05 60)" : "transparent",
+                  borderRadius: line.belowMarginBand ? 8 : 0,
+                  padding: line.belowMarginBand ? "6px 8px 8px" : "0 0 8px",
+                }}
+              >
                 <div>
                   <div style={{ fontWeight: 700 }}>{line.displayName ?? line.catalogName}</div>
                   <div className="muted" style={{ fontSize: 11 }}>
                     {line.partNumber ?? "Deal part"} &middot; {line.quantity} &times; Rs {line.unitGrossPrice}
                   </div>
+                  {line.belowMarginBand && (
+                    <div style={{ fontSize: 10.5, fontWeight: 800, color: "oklch(55% 0.18 60)", marginTop: 2 }}>LOW MARGIN</div>
+                  )}
                 </div>
                 <div style={{ fontWeight: 700 }}>Rs {line.lineGrossAmount}</div>
               </div>

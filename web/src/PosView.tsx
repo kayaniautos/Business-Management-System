@@ -3,6 +3,7 @@ import {
   checkout,
   getCarModels,
   getEntities,
+  getMarginBand,
   getParties,
   searchParts,
   type CarModel,
@@ -25,6 +26,12 @@ interface CartLine {
   name: string;
   quantity: number;
   unitGrossPrice: number;
+  // Front-of-LIFO-queue cost at the moment this was added to the cart —
+  // for the margin-alert live hint (CLAUDE.md 5.10) only. Null for a Deal
+  // Part or a part with no cost layer yet; the authoritative flag actually
+  // written to the sale is computed fresh server-side at checkout
+  // (services/margin.ts), this is just a heads-up while typing a price.
+  currentUnitCost?: string | null;
 }
 
 const KIYANI_AUTOS = "Kiyani Autos";
@@ -57,6 +64,7 @@ export function PosView({ user }: { user: LoginResult }) {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [checkoutResult, setCheckoutResult] = useState<CheckoutResult | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [minimumMarginPercent, setMinimumMarginPercent] = useState<number | null>(null);
 
   useEffect(() => {
     getEntities().then((list) => {
@@ -65,7 +73,16 @@ export function PosView({ user }: { user: LoginResult }) {
     });
     getParties({ nature: "S3" }).then(setCustomers).catch(() => {});
     getCarModels().then(setCarModels).catch(() => {});
+    getMarginBand().then((r) => setMinimumMarginPercent(r.minimumMarginPercent)).catch(() => {});
   }, []);
+
+  // Margin-alert live hint (CLAUDE.md 5.10) — purely informational, the
+  // authoritative flag is computed and stored server-side at checkout.
+  function marginWarning(line: CartLine): string | null {
+    if (minimumMarginPercent == null || line.currentUnitCost == null || line.unitGrossPrice <= 0) return null;
+    const marginPercent = ((line.unitGrossPrice - Number(line.currentUnitCost)) / line.unitGrossPrice) * 100;
+    return marginPercent < minimumMarginPercent ? `Low margin (${marginPercent.toFixed(1)}%)` : null;
+  }
 
   const selectedEntity = entities?.find((e) => e.id === entityId);
   const canDiscount = selectedEntity?.name === KIYANI_AUTOS;
@@ -149,7 +166,15 @@ export function PosView({ user }: { user: LoginResult }) {
       }
       return [
         ...prev,
-        { key, controlPartId: part.id, partNumber: part.partNumber ?? undefined, name: part.name, quantity: 1, unitGrossPrice: 0 },
+        {
+          key,
+          controlPartId: part.id,
+          partNumber: part.partNumber ?? undefined,
+          name: part.name,
+          quantity: 1,
+          unitGrossPrice: 0,
+          currentUnitCost: part.currentUnitCost,
+        },
       ];
     });
   }
@@ -373,6 +398,9 @@ export function PosView({ user }: { user: LoginResult }) {
                   />
                 </label>
               </div>
+              {marginWarning(line) && (
+                <div style={{ fontSize: 10.5, fontWeight: 800, color: "oklch(55% 0.18 60)" }}>{marginWarning(line)}</div>
+              )}
             </div>
           ))}
 

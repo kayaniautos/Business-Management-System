@@ -5,9 +5,11 @@ import {
   createRole,
   deactivateUser,
   getAdminUsers,
+  getMarginBand,
   getRoles,
   grantAdmin,
   revokeAdmin,
+  setMarginBand,
   setUserRoles,
   type AdminUser,
   type Role,
@@ -50,6 +52,10 @@ export function AdminSettingsView() {
   const [grantPassword, setGrantPassword] = useState("");
   const [grantingBusy, setGrantingBusy] = useState(false);
 
+  const [marginBand, setMarginBandInput] = useState("");
+  const [savingMarginBand, setSavingMarginBand] = useState(false);
+  const [marginBandSaved, setMarginBandSaved] = useState(false);
+
   function loadRoles() {
     getRoles().then(setRoles).catch((e) => setError(e instanceof Error ? e.message : "Could not load roles"));
   }
@@ -60,7 +66,24 @@ export function AdminSettingsView() {
   useEffect(() => {
     loadRoles();
     loadUsers();
+    getMarginBand().then((r) => setMarginBandInput(String(r.minimumMarginPercent))).catch(() => {});
   }, []);
+
+  async function handleSaveMarginBand() {
+    const percent = Number(marginBand);
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) return;
+    setSavingMarginBand(true);
+    setMarginBandSaved(false);
+    setError(null);
+    try {
+      await setMarginBand(percent);
+      setMarginBandSaved(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save margin band");
+    } finally {
+      setSavingMarginBand(false);
+    }
+  }
 
   async function handleCreateRole() {
     if (!newRoleName.trim()) return;
@@ -327,6 +350,28 @@ export function AdminSettingsView() {
           >
             {savingUser ? "Saving..." : "Create staff account"}
           </button>
+        </div>
+
+        <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>Margin alert</div>
+          <div className="muted" style={{ fontSize: 11.5 }}>
+            A sale line below this margin gets flagged as a soft warning — it never blocks the sale, just logs it for review.
+          </div>
+          <label className="muted" style={{ fontSize: 11.5 }}>
+            Minimum margin %
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={marginBand}
+              onChange={(e) => { setMarginBandInput(e.target.value); setMarginBandSaved(false); }}
+              style={{ display: "block", width: "100%", padding: 10, marginTop: 4, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }}
+            />
+          </label>
+          <button type="button" className="btn-primary" disabled={savingMarginBand || !marginBand} onClick={handleSaveMarginBand}>
+            {savingMarginBand ? "Saving..." : "Save"}
+          </button>
+          {marginBandSaved && <div className="muted" style={{ fontSize: 11.5, color: "oklch(45% 0.13 150)" }}>Saved.</div>}
         </div>
 
         <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>

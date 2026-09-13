@@ -15,6 +15,9 @@ export interface PartSearchResult {
   markerName: string | null;
   fitment: { make: string; model: string }[];
   isDealPart: boolean;
+  // Front-of-LIFO-queue cost, for the margin-alert live hint (CLAUDE.md
+  // 5.10) — null for a Deal Part or a part with no cost layer yet.
+  currentUnitCost: string | null;
 }
 
 export interface StaffMember {
@@ -382,6 +385,9 @@ export interface SalesDocumentDetail extends SalesDocumentSummary {
     quantity: number;
     unitGrossPrice: string;
     lineGrossAmount: string;
+    // Margin alert (CLAUDE.md 5.10) — true when this line's margin was
+    // below the configured band at the moment its stock actually moved.
+    belowMarginBand: boolean;
   }[];
   discounts: { label: string; amount: string }[];
   // LIFO-derived cost of goods sold, document-level total (CLAUDE.md "LIFO
@@ -655,3 +661,31 @@ export const postPurchaseDocument = (id: string) =>
   postJson<PurchaseDocumentSummary>(`/api/purchases/${id}/post`, {});
 export const unpostPurchaseDocument = (id: string) =>
   postJson<PurchaseDocumentSummary>(`/api/purchases/${id}/unpost`, {});
+
+// Margin alert (CLAUDE.md 5.10) — the app-wide band, and the log of
+// posted lines that fell below it.
+export const getMarginBand = () =>
+  getJson<{ minimumMarginPercent: number }>("/api/settings/margin-band");
+
+export const setMarginBand = (minimumMarginPercent: number) =>
+  putJson<{ minimumMarginPercent: number }>("/api/settings/margin-band", { minimumMarginPercent });
+
+export interface MarginOverrideRow {
+  documentNumber: string;
+  documentDate: string;
+  entityName: string;
+  partyName: string | null;
+  partNumber: string;
+  catalogName: string;
+  quantity: number;
+  unitGrossPrice: string;
+  unitCostAtSale: string | null;
+  marginPercent: number | null;
+}
+
+export const getMarginOverrides = (opts?: { legalEntityId?: string }) => {
+  const params = new URLSearchParams();
+  if (opts?.legalEntityId) params.set("legalEntityId", opts.legalEntityId);
+  const qs = params.toString();
+  return getJson<MarginOverrideRow[]>(`/api/reports/margin-overrides${qs ? `?${qs}` : ""}`);
+};

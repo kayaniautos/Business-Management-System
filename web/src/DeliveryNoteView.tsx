@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import {
   createDeliveryNote,
   getEntities,
+  getMarginBand,
   getParties,
   getSalesDocument,
   getSalesHistory,
@@ -22,6 +23,10 @@ interface DnLine {
   quantity: number;
   unitGrossPrice: number;
   fromQuotationLine?: boolean;
+  // Front-of-LIFO-queue cost, captured when added — margin-alert live
+  // hint only (CLAUDE.md 5.10); the authoritative flag is computed fresh
+  // server-side when the DN is actually posted (services/margin.ts).
+  currentUnitCost?: string | null;
 }
 
 const KIYANI_AUTOS = "Kiyani Autos";
@@ -65,6 +70,7 @@ export function DeliveryNoteView() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<CheckoutResult | null>(null);
+  const [minimumMarginPercent, setMinimumMarginPercent] = useState<number | null>(null);
 
   useEffect(() => {
     getEntities().then((list) => {
@@ -72,7 +78,16 @@ export function DeliveryNoteView() {
       if (list.length > 0) setEntityId(list[0].id);
     });
     getParties({ nature: "S3" }).then(setCustomers).catch(() => {});
+    getMarginBand().then((r) => setMinimumMarginPercent(r.minimumMarginPercent)).catch(() => {});
   }, []);
+
+  // Margin-alert live hint (CLAUDE.md 5.10) — informational only, see
+  // DnLine's own comment.
+  function marginWarning(line: DnLine): string | null {
+    if (minimumMarginPercent == null || line.currentUnitCost == null || line.unitGrossPrice <= 0) return null;
+    const marginPercent = ((line.unitGrossPrice - Number(line.currentUnitCost)) / line.unitGrossPrice) * 100;
+    return marginPercent < minimumMarginPercent ? `Low margin (${marginPercent.toFixed(1)}%)` : null;
+  }
 
   useEffect(() => {
     if (mode !== "from-quotation" || !entityId) return;
@@ -111,7 +126,10 @@ export function DeliveryNoteView() {
     setNewLines((prev) => {
       const existing = prev.find((l) => l.controlPartId === part.id);
       if (existing) return prev.map((l) => (l.controlPartId === part.id ? { ...l, quantity: l.quantity + 1 } : l));
-      return [...prev, { controlPartId: part.id, partNumber: part.partNumber ?? "", name: part.name, quantity: 1, unitGrossPrice: 0 }];
+      return [
+        ...prev,
+        { controlPartId: part.id, partNumber: part.partNumber ?? "", name: part.name, quantity: 1, unitGrossPrice: 0, currentUnitCost: part.currentUnitCost },
+      ];
     });
   }
 
@@ -308,6 +326,9 @@ export function DeliveryNoteView() {
                   <input type="number" min={0} value={line.unitGrossPrice || ""} onChange={(e) => updateNewLine(line.controlPartId, { unitGrossPrice: Math.max(0, Number(e.target.value)) })} style={{ width: 90, marginLeft: 6, padding: 6 }} />
                 </label>
               </div>
+              {marginWarning(line) && (
+                <div style={{ fontSize: 10.5, fontWeight: 800, color: "oklch(55% 0.18 60)" }}>{marginWarning(line)}</div>
+              )}
             </div>
           ))}
 

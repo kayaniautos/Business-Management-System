@@ -4,6 +4,7 @@ import { PosView } from "./PosView.js";
 import { QuotationView } from "./QuotationView.js";
 import { DeliveryNoteView } from "./DeliveryNoteView.js";
 import { InvoiceFromDeliveryView } from "./InvoiceFromDeliveryView.js";
+import { MarginOverridesView } from "./MarginOverridesView.js";
 import { InventoryView } from "./InventoryView.js";
 import { StockAdjustmentView } from "./StockAdjustmentView.js";
 import { DealPartView } from "./DealPartView.js";
@@ -62,6 +63,7 @@ export function App() {
       {view === "quotations" && <QuotationView />}
       {view === "delivery-notes" && <DeliveryNoteView />}
       {view === "invoice-from-delivery" && <InvoiceFromDeliveryView />}
+      {view === "margin-overrides" && <MarginOverridesView />}
       {view === "inventory" && <InventoryView />}
       {view === "stock-adjustments" && <StockAdjustmentView />}
       {view === "deal-parts" && <DealPartView />}
