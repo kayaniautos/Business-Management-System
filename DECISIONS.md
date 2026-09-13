@@ -58,6 +58,39 @@ line that doesn't exist anywhere else in this schema.
 
 ---
 
+## 2026-09-13 — Extended Deal Part lines to Quotation and Delivery Note
+
+**What triggered this:** presented as a next-feature option, picked as
+the recommended one — a confirmed, contained gap needing no client
+input, since it's the same already-built bundling concept (Deal Parts,
+built 2026-09-10) just reaching two more document types in the same
+chain it was always conceptually part of.
+
+**Decision:** extend `quotationLineSchema`/`dnLineSchema` to accept
+`dealPartId`, with the identical "exactly one of controlPartId/
+dealPartId" validation checkout's own line schema already used.
+
+**Why this needed almost no new backend code:** the shared validation
+and total-computation helpers (`sales-document-helpers.ts`) and the
+sales-detail query's `COALESCE(controlParts.name, dealParts.printName)`
+were already written generically against "a line has either a control
+part or a deal part" — checkout was simply the only caller that ever
+exercised the `dealPartId` branch. This is the payoff of building that
+shared logic generically the first time, back when Deal Parts were
+first added, rather than writing checkout-specific logic that would
+have needed a rewrite now.
+
+**A pre-existing defensive filter got removed, not just left alone:**
+Delivery Note's "from Quotation" line picker had filtered out any line
+without a `controlPartId`, written back when a Quotation genuinely could
+never produce a Deal Part line (the filter's own comment said so
+explicitly). Since a Quotation can produce one now, keeping that filter
+would have silently dropped real bundle lines during conversion — this
+needed an active removal, not just extending the schemas and calling it
+done.
+
+---
+
 ## 2026-09-13 — Merged multiple Goods Receipts onto one Purchase Invoice, no schema change
 
 **What triggered this:** presented as a next-feature option right after
