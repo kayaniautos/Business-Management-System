@@ -18,12 +18,20 @@ import {
   SalesDocumentValidationError,
 } from "../services/sales-document-helpers.js";
 
-const dnLineSchema = z.object({
-  controlPartId: z.string().uuid(),
-  quantity: z.number().int().min(1),
-  unitGrossPrice: z.number().min(0),
-  displayName: z.string().min(1).max(200).optional(),
-});
+const dnLineSchema = z
+  .object({
+    // Exactly one of these two — a regular part or a Deal Part bundle
+    // (CLAUDE.md 5.4). Deal Part lines on DN built 2026-09-13, mirroring
+    // checkout's own checkoutLineSchema exactly.
+    controlPartId: z.string().uuid().optional(),
+    dealPartId: z.string().uuid().optional(),
+    quantity: z.number().int().min(1),
+    unitGrossPrice: z.number().min(0),
+    displayName: z.string().min(1).max(200).optional(),
+  })
+  .refine((l) => Boolean(l.controlPartId) !== Boolean(l.dealPartId), {
+    message: "Each line must reference exactly one part or deal part",
+  });
 
 const dnDiscountSchema = z.object({
   label: z.string().min(1).max(200),
@@ -145,6 +153,7 @@ export const deliveryNotesRoutes: FastifyPluginAsync = async (fastify) => {
             salesDocumentId: doc.id,
             lineNumber: i + 1,
             controlPartId: line.controlPartId,
+            dealPartId: line.dealPartId,
             displayName: line.displayName,
             quantity: line.quantity,
             unitGrossPrice: line.unitGrossPrice.toFixed(2),

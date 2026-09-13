@@ -11,11 +11,9 @@ import { controlParts, dealParts, legalEntities, parties } from "../../db/schema
  */
 
 export interface SalesLineInput {
-  // Exactly one of these two is set per line — enforced by the caller's
-  // Zod schema (checkoutLineSchema in sales.ts is the only one that
-  // actually allows dealPartId; Quotation/DN still only accept
-  // controlPartId, so this stays optional here without changing their
-  // behavior).
+  // Exactly one of these two is set per line — enforced by each caller's
+  // own Zod schema (checkoutLineSchema, quotationLineSchema, dnLineSchema
+  // all allow dealPartId as of 2026-09-13).
   controlPartId?: string;
   dealPartId?: string;
   quantity: number;
@@ -48,10 +46,10 @@ export async function snapshotPartyTaxInfo(partyId: string | undefined) {
 /**
  * Validates that every line's reference actually exists — a control part
  * for a regular line, a Deal Part (CLAUDE.md 5.4) for a bundle line. Also
- * rejects a line carrying neither or both references, since the schemas
- * that allow dealPartId (checkoutLineSchema) enforce "exactly one" via
- * Zod but this is the one place shared by every caller, including ones
- * whose own schema doesn't have dealPartId at all.
+ * rejects a line carrying neither or both references — each caller's own
+ * Zod schema already enforces "exactly one" via `.refine()`, but this is
+ * the one place shared by every caller, so it's checked here too rather
+ * than trusted.
  */
 export async function requireControlPartsExist(lines: SalesLineInput[]) {
   for (const line of lines) {
