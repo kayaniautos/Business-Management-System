@@ -37,13 +37,13 @@ import { controlParts } from "./inventory.js";
  *   to the chart of accounts either, so this isn't a purchasing-specific
  *   gap. A Purchase Invoice here records the transaction and its total,
  *   nothing more.
- * - Merging MULTIPLE goods receipts onto one Purchase Invoice (handover
- *   doc 6.3 explicitly asks for this) — first pass only supports invoicing
- *   from ONE goods receipt at a time, matching this project's own
- *   precedent of building the single-source case first (Delivery Note's
- *   "from Quotation" started the same way). `[unclear — confirm]` when
- *   multi-receipt merging is actually needed vs. one-invoice-per-receipt
- *   being good enough in practice.
+ * - ~~Merging MULTIPLE goods receipts onto one Purchase Invoice~~ — **built
+ *   2026-09-13**, mirroring the sales side's Invoice-from-Delivery-Note(s)
+ *   (`src/server/routes/purchase-invoices.ts`): pick several posted
+ *   receipts for the same entity and supplier, each contributing its own
+ *   lines (not merged into one row per part — unlike the sales side,
+ *   nothing in the handover doc asks for that here, only for combining
+ *   several receipts' bills onto one invoice).
  * - Tax computation on the purchase side — `taxTotal` exists to hold a
  *   future result, always 0 for now, same reasoning as sales_documents.
  *

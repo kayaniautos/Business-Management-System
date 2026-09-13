@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { purchaseDocuments, purchaseDocumentLines, purchaseDocumentLinks } from "../../db/schema/index.js";
 import { assignDocumentNumber } from "../services/document-numbers.js";
@@ -25,11 +25,20 @@ const invoiceBodySchema = z.object({
   // The supplier's own invoice number — the actual reconciliation event
   // this document represents (CLAUDE.md section 7).
   supplierRef: z.string().max(100).optional(),
-  // Required: a Purchase Invoice is always raised against a Goods Receipt
-  // that already brought the stock in. First pass supports exactly ONE
-  // source receipt per invoice — see purchase-documents.ts's header
-  // comment for why merging several isn't built yet.
-  sourceGoodsReceiptId: z.string().uuid(),
+  // A Purchase Invoice is always raised against one or more Goods
+  // Receipts that already brought the stock in (handover doc 6.3: "an
+  // invoice can be raised from one challan or several combined") — every
+  // receipt gets its own purchase_document_links row back to this
+  // invoice, mirroring the sales side's Invoice-from-Delivery-Note(s).
+  sourceGoodsReceiptIds: z.array(z.string().uuid()).min(1),
+  // NOT auto-derived from the source receipts — the client sends the
+  // exact lines to bill, since the real invoice quantity/cost can differ
+  // from what a receipt recorded (this is the whole reason a Purchase
+  // Invoice is its own document rather than a status flip on a receipt).
+  // Lines from several receipts stay as separate rows here, one per
+  // original receipt line — unlike the sales side's Invoice-from-DN,
+  // nothing in the handover doc asks for same-part lines across receipts
+  // to merge into one row.
   lines: z.array(invoiceLineSchema).min(1),
 });
 
@@ -42,27 +51,86 @@ const invoiceResponseSchema = z.object({
 
 const errorResponseSchema = z.object({ error: z.string() });
 
+const uninvoicedGrnSchema = z.object({
+  id: z.string(),
+  documentNumber: z.string(),
+  documentDate: z.string(),
+  totalAmount: z.string(),
+});
+
 /**
- * First real Purchase Invoice creation — the supplier's actual bill
- * arriving, reconciled against a Goods Receipt already recorded
+ * Purchase Invoice creation — the supplier's actual bill arriving,
+ * reconciled against one or more Goods Receipts already recorded
  * (CLAUDE.md section 7: "reconciled later when the actual invoice
- * arrives"). Created already "posted" (an arrived supplier invoice is a
- * finalized financial event, same reasoning as POS checkout's Invoice
- * being posted immediately) — but deliberately writes NO stock movement
- * of its own, since the linked Goods Receipt already moved stock when
- * IT was posted. Costs entered here can differ from the receipt's
- * costs (the actual invoice price vs. an estimated receiving price is a
- * real business scenario), which is exactly why this is its own document
- * with its own lines, not just a status flip on the receipt.
+ * arrives"; handover doc 6.3: "an invoice can be raised from one challan
+ * or several combined" — built 2026-09-13). Created already "posted"
+ * (an arrived supplier invoice is a finalized financial event, same
+ * reasoning as POS checkout's Invoice being posted immediately) — but
+ * deliberately writes NO stock movement of its own, since the linked
+ * Goods Receipt(s) already moved stock when THEY were posted. Costs
+ * entered here can differ from a receipt's own costs (the actual invoice
+ * price vs. an estimated receiving price is a real business scenario),
+ * which is exactly why this is its own document with its own lines, not
+ * just a status flip on the receipt(s).
+ *
+ * A Goods Receipt can be billed at most once — reselecting an
+ * already-invoiced one is rejected by name, checked via
+ * purchase_document_links, mirroring the sales side's Invoice-from-DN.
+ * (This guard didn't exist before this pass, when only one receipt could
+ * ever be selected at a time; closing it now is a natural side effect of
+ * letting several be picked together, not a separate fix.)
  */
 export const purchaseInvoicesRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  app.get(
+    "/uninvoiced-goods-receipts",
+    {
+      schema: {
+        querystring: z.object({
+          legalEntityId: z.string().uuid(),
+          partyId: z.string().uuid(),
+        }),
+        response: { 200: z.array(uninvoicedGrnSchema) },
+      },
+    },
+    async (request) => {
+      const { legalEntityId, partyId } = request.query;
+
+      const alreadyInvoiced = await db
+        .select({ grnId: purchaseDocumentLinks.fromDocumentId })
+        .from(purchaseDocumentLinks)
+        .innerJoin(purchaseDocuments, eq(purchaseDocuments.id, purchaseDocumentLinks.toDocumentId))
+        .where(eq(purchaseDocuments.documentType, "purchase_invoice"));
+      const invoicedIds = alreadyInvoiced.map((r) => r.grnId);
+
+      const rows = await db
+        .select({
+          id: purchaseDocuments.id,
+          documentNumber: purchaseDocuments.documentNumber,
+          documentDate: purchaseDocuments.documentDate,
+          totalAmount: purchaseDocuments.totalAmount,
+        })
+        .from(purchaseDocuments)
+        .where(
+          and(
+            eq(purchaseDocuments.documentType, "goods_receipt"),
+            eq(purchaseDocuments.status, "posted"),
+            eq(purchaseDocuments.legalEntityId, legalEntityId),
+            eq(purchaseDocuments.partyId, partyId),
+          ),
+        )
+        .orderBy(purchaseDocuments.documentDate);
+
+      return rows.filter((r) => !invoicedIds.includes(r.id));
+    },
+  );
 
   app.post(
     "/",
     { schema: { body: invoiceBodySchema, response: { 200: invoiceResponseSchema, 400: errorResponseSchema } } },
     async (request, reply) => {
-      const { legalEntityId, partyId, supplierRef, sourceGoodsReceiptId, lines } = request.body;
+      const { legalEntityId, partyId, supplierRef, sourceGoodsReceiptIds, lines } = request.body;
 
       let subtotal, total;
       try {
@@ -71,20 +139,49 @@ export const purchaseInvoicesRoutes: FastifyPluginAsync = async (fastify) => {
         await requirePurchasePartsExist(lines);
         ({ subtotal, total } = computePurchaseTotals(lines));
 
-        const source = await db.query.purchaseDocuments.findFirst({
-          where: eq(purchaseDocuments.id, sourceGoodsReceiptId),
-        });
-        if (!source || source.documentType !== "goods_receipt") {
-          throw new PurchaseDocumentValidationError("Source goods receipt not found");
+        const sources = await db
+          .select()
+          .from(purchaseDocuments)
+          .where(inArray(purchaseDocuments.id, sourceGoodsReceiptIds));
+
+        if (sources.length !== sourceGoodsReceiptIds.length) {
+          throw new PurchaseDocumentValidationError("One or more goods receipts were not found");
         }
-        if (source.legalEntityId !== legalEntityId) {
-          throw new PurchaseDocumentValidationError(
-            "Source goods receipt belongs to a different entity",
+        for (const source of sources) {
+          if (source.documentType !== "goods_receipt") {
+            throw new PurchaseDocumentValidationError(`${source.documentNumber} is not a goods receipt`);
+          }
+          if (source.legalEntityId !== legalEntityId) {
+            throw new PurchaseDocumentValidationError(
+              `${source.documentNumber} belongs to a different entity`,
+            );
+          }
+          if (source.partyId !== partyId) {
+            throw new PurchaseDocumentValidationError(
+              "All selected goods receipts must be from the same supplier",
+            );
+          }
+          if (source.status !== "posted") {
+            throw new PurchaseDocumentValidationError(
+              `${source.documentNumber} must be posted before it can be invoiced`,
+            );
+          }
+        }
+
+        const existingLinks = await db
+          .select({ grnId: purchaseDocumentLinks.fromDocumentId })
+          .from(purchaseDocumentLinks)
+          .innerJoin(purchaseDocuments, eq(purchaseDocuments.id, purchaseDocumentLinks.toDocumentId))
+          .where(
+            and(
+              eq(purchaseDocuments.documentType, "purchase_invoice"),
+              inArray(purchaseDocumentLinks.fromDocumentId, sourceGoodsReceiptIds),
+            ),
           );
-        }
-        if (source.status !== "posted") {
+        if (existingLinks.length > 0) {
+          const already = sources.find((s) => s.id === existingLinks[0].grnId);
           throw new PurchaseDocumentValidationError(
-            "The goods receipt must be posted before it can be invoiced",
+            `${already?.documentNumber ?? "One of the selected goods receipts"} has already been invoiced`,
           );
         }
       } catch (err) {
@@ -125,10 +222,12 @@ export const purchaseInvoicesRoutes: FastifyPluginAsync = async (fastify) => {
           })),
         );
 
-        await tx.insert(purchaseDocumentLinks).values({
-          fromDocumentId: sourceGoodsReceiptId,
-          toDocumentId: doc.id,
-        });
+        await tx.insert(purchaseDocumentLinks).values(
+          sourceGoodsReceiptIds.map((grnId) => ({
+            fromDocumentId: grnId,
+            toDocumentId: doc.id,
+          })),
+        );
 
         return doc;
       });

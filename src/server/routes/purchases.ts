@@ -6,6 +6,7 @@ import { db } from "../../db/client.js";
 import {
   purchaseDocuments,
   purchaseDocumentLines,
+  purchaseDocumentLinks,
   legalEntities,
   controlParts,
   parties,
@@ -54,6 +55,10 @@ const purchaseDocumentDetailSchema = purchaseDocumentSummarySchema.extend({
     }),
   ),
   amountPaid: z.string(),
+  // Goods receipt(s) this Purchase Invoice was raised from (built
+  // 2026-09-13) — always empty for a Purchase Order/Goods Receipt/
+  // Supplier Return, only ever set on a Purchase Invoice.
+  sourceGoodsReceipts: z.array(z.string()),
 });
 
 const errorResponseSchema = z.object({ error: z.string() });
@@ -177,7 +182,19 @@ export const purchasesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const amountPaid = settlementRows.reduce((sum, s) => sum + Number(s.amount), 0);
 
-      return { ...header, lines: lineRows, settlements: settlementRows, amountPaid: amountPaid.toFixed(2) };
+      const sourceGrnRows = await db
+        .select({ documentNumber: purchaseDocuments.documentNumber })
+        .from(purchaseDocumentLinks)
+        .innerJoin(purchaseDocuments, eq(purchaseDocuments.id, purchaseDocumentLinks.fromDocumentId))
+        .where(and(eq(purchaseDocumentLinks.toDocumentId, id), eq(purchaseDocuments.documentType, "goods_receipt")));
+
+      return {
+        ...header,
+        lines: lineRows,
+        settlements: settlementRows,
+        amountPaid: amountPaid.toFixed(2),
+        sourceGoodsReceipts: sourceGrnRows.map((r) => r.documentNumber),
+      };
     },
   );
 
