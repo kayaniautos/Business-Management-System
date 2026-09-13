@@ -17,8 +17,14 @@ import {
 } from "./api.js";
 
 interface DnLine {
-  controlPartId: string;
-  partNumber: string;
+  // Stable identity — "part:<id>" or "deal:<id>", since a line is either
+  // a regular part or a Deal Part bundle (CLAUDE.md 5.4), never both.
+  // Deal Part support on DN built 2026-09-13 — same pattern as PosView's
+  // own cart.
+  key: string;
+  controlPartId?: string;
+  dealPartId?: string;
+  partNumber?: string;
   name: string;
   quantity: number;
   unitGrossPrice: number;
@@ -26,6 +32,8 @@ interface DnLine {
   // Front-of-LIFO-queue cost, captured when added — margin-alert live
   // hint only (CLAUDE.md 5.10); the authoritative flag is computed fresh
   // server-side when the DN is actually posted (services/margin.ts).
+  // Always null for a Deal Part line (margin evaluation isn't built for
+  // bundles).
   currentUnitCost?: string | null;
 }
 
@@ -116,25 +124,30 @@ export function DeliveryNoteView() {
   async function handleSearch(e: FormEvent) {
     e.preventDefault();
     try {
-      setResults(await searchParts(q));
+      // Deal Parts (CLAUDE.md 5.4) merged into results, same as POS —
+      // built 2026-09-13, DN was the last search call still opted out.
+      setResults(await searchParts(q, { includeDealParts: true }));
     } catch {
       setResults([]);
     }
   }
 
   function addNewLine(part: PartSearchResult) {
+    const key = part.isDealPart ? `deal:${part.id}` : `part:${part.id}`;
     setNewLines((prev) => {
-      const existing = prev.find((l) => l.controlPartId === part.id);
-      if (existing) return prev.map((l) => (l.controlPartId === part.id ? { ...l, quantity: l.quantity + 1 } : l));
+      const existing = prev.find((l) => l.key === key);
+      if (existing) return prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity + 1 } : l));
       return [
         ...prev,
-        { controlPartId: part.id, partNumber: part.partNumber ?? "", name: part.name, quantity: 1, unitGrossPrice: 0, currentUnitCost: part.currentUnitCost },
+        part.isDealPart
+          ? { key, dealPartId: part.id, name: part.name, quantity: 1, unitGrossPrice: 0, currentUnitCost: null }
+          : { key, controlPartId: part.id, partNumber: part.partNumber ?? undefined, name: part.name, quantity: 1, unitGrossPrice: 0, currentUnitCost: part.currentUnitCost },
       ];
     });
   }
 
-  function updateNewLine(controlPartId: string, patch: Partial<DnLine>) {
-    setNewLines((prev) => prev.map((l) => (l.controlPartId === controlPartId ? { ...l, ...patch } : l)));
+  function updateNewLine(key: string, patch: Partial<DnLine>) {
+    setNewLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   }
 
   function toggleQuoteLine(lineNumber: number, checked: boolean) {
@@ -155,21 +168,21 @@ export function DeliveryNoteView() {
 
   /**
    * The actual line set that will be submitted, resolved from whichever
-   * mode is active. DN doesn't support Deal Part lines yet (only POS
-   * checkout does — CLAUDE.md 5.4) — a Quotation can't actually produce
-   * one today since QuotationView never creates dealPartId lines, but
-   * `controlPartId` is nullable on the shared detail type now, so this
-   * filters defensively rather than assuming it's always present.
+   * mode is active. Deal Part lines (CLAUDE.md 5.4) built 2026-09-13 for
+   * both modes — "from Quotation" now carries a Deal Part line through
+   * unchanged rather than filtering it out, since a Quotation can
+   * genuinely produce one now too.
    */
   function resolveLines() {
     if (mode === "new") {
-      return newLines.map((l) => ({ controlPartId: l.controlPartId, quantity: l.quantity, unitGrossPrice: l.unitGrossPrice }));
+      return newLines.map((l) => ({ controlPartId: l.controlPartId, dealPartId: l.dealPartId, quantity: l.quantity, unitGrossPrice: l.unitGrossPrice }));
     }
     if (!sourceDetail) return [];
     return sourceDetail.lines
-      .filter((l) => l.controlPartId && selectedQuoteLines[l.lineNumber]?.checked)
+      .filter((l) => selectedQuoteLines[l.lineNumber]?.checked)
       .map((l) => ({
-        controlPartId: l.controlPartId as string,
+        controlPartId: l.controlPartId ?? undefined,
+        dealPartId: l.dealPartId ?? undefined,
         quantity: selectedQuoteLines[l.lineNumber].quantity,
         unitGrossPrice: Number(l.unitGrossPrice),
       }));
@@ -284,9 +297,20 @@ export function DeliveryNoteView() {
             </form>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
               {results.map((part) => (
-                <div key={part.id} className="glass-card" style={{ padding: 14, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{part.name}</div>
-                  <div className="muted" style={{ fontSize: 11 }}>{part.partNumber}</div>
+                <div
+                  key={part.id}
+                  className="glass-card"
+                  style={{ padding: 14, display: "flex", flexDirection: "column", gap: 6, borderLeft: part.isDealPart ? "4px solid var(--accent)" : undefined }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13.5 }}>{part.name}</div>
+                    {part.isDealPart && (
+                      <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.3, color: "white", background: "var(--accent)", borderRadius: 6, padding: "2px 6px" }}>
+                        BUNDLE
+                      </span>
+                    )}
+                  </div>
+                  <div className="muted" style={{ fontSize: 11 }}>{part.isDealPart ? "Deal part" : part.partNumber}</div>
                   <button type="button" className="btn-primary" onClick={() => addNewLine(part)}>Add</button>
                 </div>
               ))}
@@ -296,10 +320,10 @@ export function DeliveryNoteView() {
           <div className="glass-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>Pick lines to carry onto this DN</div>
             {!sourceDetail && <div className="muted" style={{ fontSize: 13 }}>Select a quotation above.</div>}
-            {sourceDetail?.lines.filter((l) => l.controlPartId).map((l) => (
+            {sourceDetail?.lines.map((l) => (
               <label key={l.lineNumber} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
                 <input type="checkbox" checked={selectedQuoteLines[l.lineNumber]?.checked ?? false} onChange={(e) => toggleQuoteLine(l.lineNumber, e.target.checked)} style={{ width: 20, height: 20 }} />
-                <span style={{ flex: 1 }}>{l.displayName ?? l.catalogName} <span className="muted">({l.partNumber})</span></span>
+                <span style={{ flex: 1 }}>{l.displayName ?? l.catalogName} <span className="muted">({l.partNumber ?? "Deal part"})</span></span>
                 <input type="number" min={1} max={l.quantity} value={selectedQuoteLines[l.lineNumber]?.quantity ?? l.quantity} onChange={(e) => updateQuoteLineQty(l.lineNumber, Math.min(l.quantity, Math.max(1, Number(e.target.value))))} style={{ width: 56, padding: 6 }} />
                 <span className="muted">of {l.quantity}</span>
               </label>
@@ -313,17 +337,17 @@ export function DeliveryNoteView() {
 
         {mode === "new" &&
           newLines.map((line) => (
-            <div key={line.controlPartId} style={{ display: "flex", flexDirection: "column", gap: 8, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
+            <div key={line.key} style={{ display: "flex", flexDirection: "column", gap: 8, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: 13.5 }}>{line.name}</div>
-              <div className="muted" style={{ fontSize: 11 }}>{line.partNumber}</div>
+              <div className="muted" style={{ fontSize: 11 }}>{line.dealPartId ? "Deal part" : line.partNumber}</div>
               <div style={{ display: "flex", gap: 10 }}>
                 <label className="muted" style={{ fontSize: 11 }}>
                   Qty
-                  <input type="number" min={1} value={line.quantity} onChange={(e) => updateNewLine(line.controlPartId, { quantity: Math.max(1, Number(e.target.value)) })} style={{ width: 56, marginLeft: 6, padding: 6 }} />
+                  <input type="number" min={1} value={line.quantity} onChange={(e) => updateNewLine(line.key, { quantity: Math.max(1, Number(e.target.value)) })} style={{ width: 56, marginLeft: 6, padding: 6 }} />
                 </label>
                 <label className="muted" style={{ fontSize: 11 }}>
                   Gross price (Rs)
-                  <input type="number" min={0} value={line.unitGrossPrice || ""} onChange={(e) => updateNewLine(line.controlPartId, { unitGrossPrice: Math.max(0, Number(e.target.value)) })} style={{ width: 90, marginLeft: 6, padding: 6 }} />
+                  <input type="number" min={0} value={line.unitGrossPrice || ""} onChange={(e) => updateNewLine(line.key, { unitGrossPrice: Math.max(0, Number(e.target.value)) })} style={{ width: 90, marginLeft: 6, padding: 6 }} />
                 </label>
               </div>
               {marginWarning(line) && (

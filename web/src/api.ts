@@ -80,8 +80,8 @@ export async function getEntities(): Promise<LegalEntity[]> {
 }
 
 export interface CheckoutLine {
-  // Exactly one of these two — Quotation/DN never send dealPartId (their
-  // backend routes don't accept it), only POS checkout does.
+  // Exactly one of these two — every sales document type's line schema
+  // accepts dealPartId now (built 2026-09-13, CLAUDE.md 5.4).
   controlPartId?: string;
   dealPartId?: string;
   quantity: number;
@@ -372,9 +372,8 @@ export interface SalesDocumentDetail extends SalesDocumentSummary {
   partyId: string | null;
   lines: {
     lineNumber: number;
-    // Exactly one of these two is set — null for the other. Only a
-    // checkout-created Invoice can currently have a dealPartId line;
-    // Quotation/DN lines always have controlPartId.
+    // Exactly one of these two is set — null for the other. Any sales
+    // document type can carry a Deal Part line now (built 2026-09-13).
     controlPartId: string | null;
     dealPartId: string | null;
     // Null only for a Deal Part line.
