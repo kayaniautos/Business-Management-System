@@ -58,6 +58,45 @@ line that doesn't exist anywhere else in this schema.
 
 ---
 
+## 2026-09-13 — Proposed and applied a chart of accounts numbering scheme
+
+**What triggered this:** with the confirmed, unblocked Sales/Purchasing
+feature backlog essentially exhausted, this was the one remaining
+confirmed-but-unbuilt item that needed no further client input — the
+client already said a scheme was needed ("define coding in a way to
+create space for future expansion"), just never said what it should be.
+
+**Decision:** one 1000-wide numeric block per confirmed top-level
+category, in the client's own listed order (1000s Non-Current Assets
+through 5000s Income/(Loss)), each account numbered ten apart within
+its block. Applied to all 40 existing rows via a new idempotent script
+(`seed-coa-codes.ts`), not a schema change — `chart_of_accounts.code`
+was already a nullable free-text column, held open specifically for
+this.
+
+**Why ten apart, not sequential (1001, 1002...):** sequential numbering
+leaves no room to insert a new account between two existing ones without
+renumbering everything after it — exactly the "expansion-ready" property
+the client asked for. Ten-apart spacing gives 9 free slots between any
+two existing accounts, and 99 accounts of headroom per category before
+the block itself needs widening.
+
+**Why bank accounts get parent-prefixed child codes (2081-2086 under
+2080), breaking the strict "ten apart" pattern for that one group:**
+they're not independent accounts, they're already modeled as children of
+one "Bank accounts" summary row via `parentAccountId` — the numbering
+should say the same thing the schema already says. This is the standard,
+recognizable way to number a sub-ledger nested under a summary account,
+not an invented exception.
+
+**This is explicitly NOT a client-confirmed final scheme.** The client
+confirmed the *need* for a scheme, not this specific one. Every code is
+a plain value in an already-nullable column, so if the numbers
+themselves need to change later, that's a re-run of the same script
+with a different mapping — not a migration, not a rewrite.
+
+---
+
 ## 2026-09-13 — Extended Deal Part lines to Quotation and Delivery Note
 
 **What triggered this:** presented as a next-feature option, picked as
