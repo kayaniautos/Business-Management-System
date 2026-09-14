@@ -117,62 +117,87 @@ export function PosView({ user }: { user: LoginResult }) {
   const validModel = modelNamesForMake.includes(modelInput) ? modelInput : "";
   const rowsForSelectedModel = carModels.filter((c) => c.make === validMake && c.model === validModel);
 
+  interface VariantOption {
+    label: string;
+    rowId: string;
+  }
+  function variantOptionsFor(rows: CarModel[]): VariantOption[] {
+    return rows.map((row) => {
+      const hint = [row.transmission, row.engineFuel].filter(Boolean).join(" · ");
+      const base = row.variant ?? "Base";
+      return { label: hint ? `${base} · ${hint}` : base, rowId: row.id };
+    });
+  }
+
+  // A model where NOT ONE row has a real year on file (e.g. fitment data
+  // that predates the year fields, or a model only ever entered by
+  // variant) skips the Year field entirely — Mehmoon's fix, 2026-09-14,
+  // after finding it confusing that a "Year" field would show something
+  // like "VTi · Year not specified · Manual · Petrol" when every option
+  // in it was really just a variant name with no year at all behind it.
+  // Year only ever appears when the model actually has real year data;
+  // the (rarer) case of a model with SOME dated rows and some undated
+  // ones still shows the undated rows inside the Year field itself (see
+  // below), since that field is genuinely useful there.
+  const modelHasAnyRealYear = rowsForSelectedModel.some((row) => row.yearFrom && row.yearTo);
+  const skipYearStep = Boolean(validModel) && rowsForSelectedModel.length > 0 && !modelHasAnyRealYear;
+
   // One option per individual year covered by any generation's range —
   // grouped by year VALUE, not one row per (row, year) pair, so two
   // variants overlapping in year collapse into a single Year option
   // that then requires the Variant step, rather than showing as two
   // indistinguishable duplicate years. Plus one option per row that has
   // no range set at all (existing data some fitment was tagged without
-  // a year — still needs to be pickable).
+  // a year — still needs to be pickable) — only relevant when at least
+  // one OTHER row for this model does have a real year (see skipYearStep
+  // above for the all-undated case).
   interface YearGroup {
     value: string;
     label: string;
     rows: CarModel[];
   }
   const yearGroups: YearGroup[] = [];
-  const yearMap = new Map<string, CarModel[]>();
-  for (const row of rowsForSelectedModel) {
-    if (row.yearFrom && row.yearTo) {
-      for (let y = row.yearFrom; y <= row.yearTo; y++) {
-        const key = String(y);
-        const list = yearMap.get(key) ?? [];
-        list.push(row);
-        yearMap.set(key, list);
+  if (!skipYearStep) {
+    const yearMap = new Map<string, CarModel[]>();
+    for (const row of rowsForSelectedModel) {
+      if (row.yearFrom && row.yearTo) {
+        for (let y = row.yearFrom; y <= row.yearTo; y++) {
+          const key = String(y);
+          const list = yearMap.get(key) ?? [];
+          list.push(row);
+          yearMap.set(key, list);
+        }
       }
     }
-  }
-  for (const [value, rows] of yearMap) {
-    // Only label the year with Transmission/Fuel when it's unambiguous —
-    // once Variant is needed to disambiguate, those hints move to the
-    // Variant options instead, since different rows for the same year
-    // can have different transmissions/fuels.
-    const hint = rows.length === 1 ? [rows[0].transmission, rows[0].engineFuel].filter(Boolean).join(" · ") : "";
-    yearGroups.push({ value, label: hint ? `${value} · ${hint}` : value, rows });
-  }
-  for (const row of rowsForSelectedModel) {
-    if (!row.yearFrom && !row.yearTo) {
-      const hint = [row.transmission, row.engineFuel].filter(Boolean).join(" · ");
-      const base = row.variant ? `${row.variant} · Year not specified` : "Year not specified";
-      yearGroups.push({ value: `row:${row.id}`, label: hint ? `${base} · ${hint}` : base, rows: [row] });
+    for (const [value, rows] of yearMap) {
+      // Only label the year with Transmission/Fuel when it's unambiguous —
+      // once Variant is needed to disambiguate, those hints move to the
+      // Variant options instead, since different rows for the same year
+      // can have different transmissions/fuels.
+      const hint = rows.length === 1 ? [rows[0].transmission, rows[0].engineFuel].filter(Boolean).join(" · ") : "";
+      yearGroups.push({ value, label: hint ? `${value} · ${hint}` : value, rows });
     }
+    for (const row of rowsForSelectedModel) {
+      if (!row.yearFrom && !row.yearTo) {
+        const hint = [row.transmission, row.engineFuel].filter(Boolean).join(" · ");
+        const base = row.variant ? `${row.variant} · Year not specified` : "Year not specified";
+        yearGroups.push({ value: `row:${row.id}`, label: hint ? `${base} · ${hint}` : base, rows: [row] });
+      }
+    }
+    yearGroups.sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true }));
   }
-  yearGroups.sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true }));
 
   const selectedYearGroup = yearGroups.find((g) => g.label === yearInput);
-  // Variant only ever shows up when the selected year still matches more
-  // than one row — most models never need it at all.
-  const needsVariant = Boolean(selectedYearGroup && selectedYearGroup.rows.length > 1);
-  interface VariantOption {
-    label: string;
-    rowId: string;
-  }
-  const variantOptions: VariantOption[] = needsVariant
-    ? selectedYearGroup!.rows.map((row) => {
-        const hint = [row.transmission, row.engineFuel].filter(Boolean).join(" · ");
-        const base = row.variant ?? "Base";
-        return { label: hint ? `${base} · ${hint}` : base, rowId: row.id };
-      })
-    : [];
+  // Variant shows up either because the model skips Year entirely and
+  // has more than one row (the new case), or because a selected year
+  // still matches more than one row (the original case) — most models
+  // hit neither and never see a Variant field at all.
+  const showVariantField = skipYearStep ? rowsForSelectedModel.length > 1 : Boolean(selectedYearGroup && selectedYearGroup.rows.length > 1);
+  const variantOptions: VariantOption[] = skipYearStep
+    ? variantOptionsFor(rowsForSelectedModel)
+    : selectedYearGroup && selectedYearGroup.rows.length > 1
+      ? variantOptionsFor(selectedYearGroup.rows)
+      : [];
 
   async function runSearch(carModelId?: string) {
     setSearchError(null);
@@ -211,7 +236,23 @@ export function PosView({ user }: { user: LoginResult }) {
     setYearInput("");
     setVariantInput("");
     setSelectedCarModelId("");
-    runSearch(undefined);
+
+    if (!modelNamesForMake.includes(value)) {
+      runSearch(undefined);
+      return;
+    }
+    // A model with no real year data on any row skips straight past Year
+    // (see skipYearStep above) — if it's also down to exactly one row,
+    // there's nothing left to disambiguate, so resolve immediately
+    // rather than making staff pick a redundant one-option Variant too.
+    const rows = carModels.filter((c) => c.make === validMake && c.model === value);
+    const hasRealYear = rows.some((row) => row.yearFrom && row.yearTo);
+    if (!hasRealYear && rows.length === 1) {
+      setSelectedCarModelId(rows[0].id);
+      runSearch(rows[0].id);
+    } else {
+      runSearch(undefined);
+    }
   }
 
   function handleYearInput(value: string) {
@@ -389,21 +430,25 @@ export function PosView({ user }: { user: LoginResult }) {
                 ))}
               </datalist>
 
-              <input
-                list="pos-year-options"
-                value={yearInput}
-                onChange={(e) => handleYearInput(e.target.value)}
-                disabled={!validModel}
-                placeholder="Year..."
-                style={{ width: 170, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
-              />
-              <datalist id="pos-year-options">
-                {yearGroups.map((g) => (
-                  <option key={g.value} value={g.label} />
-                ))}
-              </datalist>
+              {!skipYearStep && (
+                <>
+                  <input
+                    list="pos-year-options"
+                    value={yearInput}
+                    onChange={(e) => handleYearInput(e.target.value)}
+                    disabled={!validModel}
+                    placeholder="Year..."
+                    style={{ width: 170, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
+                  />
+                  <datalist id="pos-year-options">
+                    {yearGroups.map((g) => (
+                      <option key={g.value} value={g.label} />
+                    ))}
+                  </datalist>
+                </>
+              )}
 
-              {needsVariant && (
+              {showVariantField && (
                 <>
                   <input
                     list="pos-variant-options"
