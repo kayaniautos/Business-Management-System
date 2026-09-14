@@ -58,6 +58,55 @@ line that doesn't exist anywhere else in this schema.
 
 ---
 
+## 2026-09-13/14 — Made the layout responsive via shared classes, not per-screen rewrites
+
+**What triggered this:** Mehmoon's direct request, "make it responsive
+too" — clarified first (since every screen had been built and verified
+only at desktop width, and CLAUDE.md never named a narrow-window target)
+to mean the whole app, down to tablet/narrow-window sizes.
+
+**Decision:** every screen shares one exact outer-container pattern
+(a two-panel row: flexible main content + a fixed-pixel-width side
+panel), copy-pasted identically across all 16 view files. Rather than
+rewriting each screen's layout individually, added shared CSS classes
+(`.view-row`, `.view-main`, `.view-panel`) that carry the responsive
+behavior, and applied them as one additional `className` per div,
+alongside each screen's existing inline style — not instead of it.
+
+**Why `!important` inside the media queries, not just a plain override:**
+each screen's own inline `style={{width: 380, ...}}` (etc.) has higher
+CSS specificity than any class-based rule, and a media query can't be
+expressed inline. The alternative — deleting every screen's own
+inline width/flex value and moving it into CSS — would have meant
+touching far more of each file's styling than the responsive behavior
+actually needed, and risked introducing per-screen sizing drift during
+the rewrite. Keeping the inline styles as the desktop source of truth
+and layering a narrow-width override on top changes exactly one thing:
+what happens below 900px.
+
+**Why the whole stacked column scrolls as one region on a narrow
+window, rather than each panel keeping its own independent scroll area
+(the desktop behavior):** a real mobile/tablet page scrolls as a single
+page; nested independently-scrolling regions inside a page that's
+already shorter than the content is an awkward pattern on a touch
+device specifically. The media query forces both inner divs to
+`overflow-y: visible` and lets the outer row do the scrolling instead.
+
+**Why the header just wraps onto extra lines instead of a collapsed
+hamburger-style menu:** the app's whole nav structure (flat tabs +
+click-to-open module dropdowns) already works fine as-is; a full
+redesign into a collapsed menu would be a bigger, riskier change than
+the actual problem (the row overflowing a narrow window) calls for.
+Wrapping is the smaller, reversible fix.
+
+**Explicitly flagged as not a confirmed spec item:** unlike the 44px
+touch-target rule (traceable to the approved UI concept's own
+accessibility review), nothing in CLAUDE.md names a specific narrow-
+window requirement — this is UI polish done ahead of an actual decision
+on tablet-terminal hardware, not the closing of a confirmed gap.
+
+---
+
 ## 2026-09-13 — Proposed and applied a chart of accounts numbering scheme
 
 **What triggered this:** with the confirmed, unblocked Sales/Purchasing
