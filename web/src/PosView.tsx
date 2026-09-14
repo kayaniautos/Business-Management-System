@@ -47,15 +47,36 @@ export function PosView({ user }: { user: LoginResult }) {
   const [results, setResults] = useState<PartSearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   // Vehicle fitment search (handover doc §6.2: "by vehicle model + year
-  // range") — cascading Make -> Model -> Year. Year is a real dropdown
-  // (Mehmoon's direction 2026-09-10: matches how a customer actually
-  // describes their car, e.g. "Corolla 2012"), generated from the
-  // yearFrom/yearTo already on each car_models row rather than a new
-  // field — picking a specific year resolves to whichever row's range
-  // contains it, so staff never need to read/interpret a range label.
+  // range") — cascading Make -> Model -> Year -> Variant, built
+  // 2026-09-14 per Mehmoon's direction. Year comes before Variant
+  // deliberately ("some variants don't come in some years, let's say
+  // Civic RS Turbo wasn't available in 2012") — Year narrows to what
+  // actually existed that year first, and Variant only appears at all
+  // when that Make+Model+Year still matches more than one car_models
+  // row. This also fixes a real bug the old Make->Model->Year-only
+  // cascade had: if two variants of the same model overlapped in year
+  // range (e.g. Corolla GLi 2014-2019 and Corolla Altis 2017-2019), the
+  // Year dropdown showed duplicate, indistinguishable year entries and
+  // silently resolved to whichever row happened to come first.
+  //
+  // Transmission/Engine Fuel are shown as a label, never their own
+  // filter step (Mehmoon's direction: neither usually changes which
+  // parts fit) — appended to the Year option's own label when that year
+  // resolves to exactly one row, or to each Variant option's label when
+  // Variant is needed to disambiguate.
+  //
+  // Every field here is a type-ahead combobox (a plain text input bound
+  // to a <datalist>, the same pattern already used for Make/Model entry
+  // in CarModelsView.tsx) rather than a plain <select> — Mehmoon's
+  // direction, "every field in the cascade." A typed value only ever
+  // advances the cascade when it exactly matches a real option; anything
+  // else is treated the same as leaving the field blank, the same way a
+  // <select>'s default empty option worked before.
   const [carModels, setCarModels] = useState<CarModel[]>([]);
-  const [selectedMake, setSelectedMake] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
+  const [makeInput, setMakeInput] = useState("");
+  const [modelInput, setModelInput] = useState("");
+  const [yearInput, setYearInput] = useState("");
+  const [variantInput, setVariantInput] = useState("");
   const [selectedCarModelId, setSelectedCarModelId] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discounts, setDiscounts] = useState<CheckoutDiscount[]>([]);
@@ -88,28 +109,70 @@ export function PosView({ user }: { user: LoginResult }) {
   const canDiscount = selectedEntity?.name === KIYANI_AUTOS;
 
   const makes = [...new Set(carModels.map((c) => c.make))].sort();
-  const modelNamesForMake = [...new Set(carModels.filter((c) => c.make === selectedMake).map((c) => c.model))].sort();
-  const rowsForSelectedModel = carModels.filter((c) => c.make === selectedMake && c.model === selectedModel);
+  // Only a typed value that exactly matches a real option ever advances
+  // the cascade — anything else (mid-typing, a typo) behaves like "not
+  // selected yet," same as a <select>'s blank default option did.
+  const validMake = makes.includes(makeInput) ? makeInput : "";
+  const modelNamesForMake = [...new Set(carModels.filter((c) => c.make === validMake).map((c) => c.model))].sort();
+  const validModel = modelNamesForMake.includes(modelInput) ? modelInput : "";
+  const rowsForSelectedModel = carModels.filter((c) => c.make === validMake && c.model === validModel);
 
-  // One option per individual year covered by any generation's range,
-  // plus one option per row that has no range set at all (existing data
-  // some fitment was tagged without a year — still needs to be pickable).
-  interface YearOption {
+  // One option per individual year covered by any generation's range —
+  // grouped by year VALUE, not one row per (row, year) pair, so two
+  // variants overlapping in year collapse into a single Year option
+  // that then requires the Variant step, rather than showing as two
+  // indistinguishable duplicate years. Plus one option per row that has
+  // no range set at all (existing data some fitment was tagged without
+  // a year — still needs to be pickable).
+  interface YearGroup {
     value: string;
     label: string;
-    carModelId: string;
+    rows: CarModel[];
   }
-  const yearOptions: YearOption[] = [];
+  const yearGroups: YearGroup[] = [];
+  const yearMap = new Map<string, CarModel[]>();
   for (const row of rowsForSelectedModel) {
     if (row.yearFrom && row.yearTo) {
       for (let y = row.yearFrom; y <= row.yearTo; y++) {
-        yearOptions.push({ value: String(y), label: String(y), carModelId: row.id });
+        const key = String(y);
+        const list = yearMap.get(key) ?? [];
+        list.push(row);
+        yearMap.set(key, list);
       }
-    } else if (!row.yearFrom && !row.yearTo) {
-      yearOptions.push({ value: `row:${row.id}`, label: "Year not specified", carModelId: row.id });
     }
   }
-  yearOptions.sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true }));
+  for (const [value, rows] of yearMap) {
+    // Only label the year with Transmission/Fuel when it's unambiguous —
+    // once Variant is needed to disambiguate, those hints move to the
+    // Variant options instead, since different rows for the same year
+    // can have different transmissions/fuels.
+    const hint = rows.length === 1 ? [rows[0].transmission, rows[0].engineFuel].filter(Boolean).join(" · ") : "";
+    yearGroups.push({ value, label: hint ? `${value} · ${hint}` : value, rows });
+  }
+  for (const row of rowsForSelectedModel) {
+    if (!row.yearFrom && !row.yearTo) {
+      const hint = [row.transmission, row.engineFuel].filter(Boolean).join(" · ");
+      const base = row.variant ? `${row.variant} · Year not specified` : "Year not specified";
+      yearGroups.push({ value: `row:${row.id}`, label: hint ? `${base} · ${hint}` : base, rows: [row] });
+    }
+  }
+  yearGroups.sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true }));
+
+  const selectedYearGroup = yearGroups.find((g) => g.label === yearInput);
+  // Variant only ever shows up when the selected year still matches more
+  // than one row — most models never need it at all.
+  const needsVariant = Boolean(selectedYearGroup && selectedYearGroup.rows.length > 1);
+  interface VariantOption {
+    label: string;
+    rowId: string;
+  }
+  const variantOptions: VariantOption[] = needsVariant
+    ? selectedYearGroup!.rows.map((row) => {
+        const hint = [row.transmission, row.engineFuel].filter(Boolean).join(" · ");
+        const base = row.variant ?? "Base";
+        return { label: hint ? `${base} · ${hint}` : base, rowId: row.id };
+      })
+    : [];
 
   async function runSearch(carModelId?: string) {
     setSearchError(null);
@@ -134,16 +197,55 @@ export function PosView({ user }: { user: LoginResult }) {
     await runSearch(selectedCarModelId || undefined);
   }
 
-  function handleSelectYear(value: string) {
-    const option = yearOptions.find((o) => o.value === value);
-    const carModelId = option?.carModelId ?? "";
-    setSelectedCarModelId(carModelId);
-    runSearch(carModelId || undefined);
+  function handleMakeInput(value: string) {
+    setMakeInput(value);
+    setModelInput("");
+    setYearInput("");
+    setVariantInput("");
+    setSelectedCarModelId("");
+    runSearch(undefined);
+  }
+
+  function handleModelInput(value: string) {
+    setModelInput(value);
+    setYearInput("");
+    setVariantInput("");
+    setSelectedCarModelId("");
+    runSearch(undefined);
+  }
+
+  function handleYearInput(value: string) {
+    setYearInput(value);
+    setVariantInput("");
+    const group = yearGroups.find((g) => g.label === value);
+    if (!group) {
+      setSelectedCarModelId("");
+      runSearch(undefined);
+      return;
+    }
+    if (group.rows.length === 1) {
+      // Unambiguous — resolve straight to the part, same as before.
+      setSelectedCarModelId(group.rows[0].id);
+      runSearch(group.rows[0].id);
+    } else {
+      // Ambiguous — wait for Variant before searching.
+      setSelectedCarModelId("");
+      runSearch(undefined);
+    }
+  }
+
+  function handleVariantInput(value: string) {
+    setVariantInput(value);
+    const option = variantOptions.find((v) => v.label === value);
+    setSelectedCarModelId(option?.rowId ?? "");
+    runSearch(option?.rowId);
   }
 
   function clearFitmentSearch() {
-    setSelectedMake("");
-    setSelectedModel("");
+    setMakeInput("");
+    setModelInput("");
+    setYearInput("");
+    setVariantInput("");
     setSelectedCarModelId("");
     runSearch(undefined);
   }
@@ -260,48 +362,65 @@ export function PosView({ user }: { user: LoginResult }) {
           {carModels.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span className="muted" style={{ fontSize: 12.5, fontWeight: 700 }}>Or find by vehicle:</span>
-              <select
-                value={selectedMake}
-                onChange={(e) => {
-                  setSelectedMake(e.target.value);
-                  setSelectedModel("");
-                  setSelectedCarModelId("");
-                  runSearch(undefined);
-                }}
-                style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
-              >
-                <option value="">Make...</option>
+              <input
+                list="pos-make-options"
+                value={makeInput}
+                onChange={(e) => handleMakeInput(e.target.value)}
+                placeholder="Make..."
+                style={{ width: 110, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
+              />
+              <datalist id="pos-make-options">
                 {makes.map((make) => (
-                  <option key={make} value={make}>{make}</option>
+                  <option key={make} value={make} />
                 ))}
-              </select>
-              <select
-                value={selectedModel}
-                onChange={(e) => {
-                  setSelectedModel(e.target.value);
-                  setSelectedCarModelId("");
-                  runSearch(undefined);
-                }}
-                disabled={!selectedMake}
-                style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
-              >
-                <option value="">Model...</option>
+              </datalist>
+
+              <input
+                list="pos-model-options"
+                value={modelInput}
+                onChange={(e) => handleModelInput(e.target.value)}
+                disabled={!validMake}
+                placeholder="Model..."
+                style={{ width: 130, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
+              />
+              <datalist id="pos-model-options">
                 {modelNamesForMake.map((model) => (
-                  <option key={model} value={model}>{model}</option>
+                  <option key={model} value={model} />
                 ))}
-              </select>
-              <select
-                key={`${selectedMake}:${selectedModel}`}
-                onChange={(e) => handleSelectYear(e.target.value)}
-                disabled={!selectedModel}
-                style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
-              >
-                <option value="">Year...</option>
-                {yearOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+              </datalist>
+
+              <input
+                list="pos-year-options"
+                value={yearInput}
+                onChange={(e) => handleYearInput(e.target.value)}
+                disabled={!validModel}
+                placeholder="Year..."
+                style={{ width: 170, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
+              />
+              <datalist id="pos-year-options">
+                {yearGroups.map((g) => (
+                  <option key={g.value} value={g.label} />
                 ))}
-              </select>
-              {selectedCarModelId && (
+              </datalist>
+
+              {needsVariant && (
+                <>
+                  <input
+                    list="pos-variant-options"
+                    value={variantInput}
+                    onChange={(e) => handleVariantInput(e.target.value)}
+                    placeholder="Variant..."
+                    style={{ width: 190, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", fontSize: 12.5, background: "white" }}
+                  />
+                  <datalist id="pos-variant-options">
+                    {variantOptions.map((v) => (
+                      <option key={v.rowId} value={v.label} />
+                    ))}
+                  </datalist>
+                </>
+              )}
+
+              {(makeInput || modelInput || yearInput || variantInput) && (
                 <button type="button" onClick={clearFitmentSearch} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-300)", fontSize: 12.5 }}>
                   Clear
                 </button>
