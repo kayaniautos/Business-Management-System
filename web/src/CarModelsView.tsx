@@ -202,8 +202,8 @@ export function CarModelsView() {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+    <div className="view-row">
+      <div className="view-main" style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>Car models</div>
           <button type="button" className="btn-primary" style={{ padding: "8px 16px" }} onClick={startCreate}>
@@ -265,7 +265,7 @@ export function CarModelsView() {
       </div>
 
       {editingId && (
-        <div className="glass-card" style={{ width: 360, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 10, overflowY: "auto" }}>
+        <div className="glass-card view-panel" style={{ width: 360, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 10, overflowY: "auto" }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>
             {editingId === "new" ? "Add car model" : "Edit car model"}
           </div>

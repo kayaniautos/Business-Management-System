@@ -185,8 +185,8 @@ export function AdminSettingsView() {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-      <div style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+    <div className="view-row">
+      <div className="view-main" style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>Staff accounts</div>
         {error && <div className="error-text">{error}</div>}
 
@@ -306,7 +306,7 @@ export function AdminSettingsView() {
         </div>
       </div>
 
-      <div style={{ width: 420, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+      <div className="view-panel" style={{ width: 420, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>New staff account</div>
           <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }} />

@@ -227,8 +227,8 @@ export function PosView({ user }: { user: LoginResult }) {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-      <div style={{ flex: 1.6, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+    <div className="view-row">
+      <div className="view-main" style={{ flex: 1.6, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         {entities && (
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span className="muted" style={{ fontSize: 12.5, fontWeight: 700 }}>Selling as:</span>
@@ -349,7 +349,7 @@ export function PosView({ user }: { user: LoginResult }) {
           </div>
         </div>
 
-        <div className="glass-card" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
+        <div className="glass-card view-panel" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>Current sale</div>
 
           <select

@@ -228,8 +228,8 @@ export function DeliveryNoteView() {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-      <div style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+    <div className="view-row">
+      <div className="view-main" style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>New delivery note</div>
           <div style={{ display: "flex", gap: 6 }}>
@@ -332,7 +332,7 @@ export function DeliveryNoteView() {
         )}
       </div>
 
-      <div className="glass-card" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
+      <div className="glass-card view-panel" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>Delivery note lines</div>
 
         {mode === "new" &&

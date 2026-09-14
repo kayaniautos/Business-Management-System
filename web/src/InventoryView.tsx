@@ -150,14 +150,14 @@ export function InventoryView() {
   }
 
   return (
-    <div style={{ display: "flex", gap: 20, padding: 24, flex: 1, overflow: "hidden" }}>
+    <div className="view-row">
       {error && (
         <div className="error-text" style={{ position: "absolute", top: 80, right: 24 }} onClick={() => setError(null)}>
           {error}
         </div>
       )}
 
-      <div className="glass-card" style={{ width: 260, flexShrink: 0, padding: 16, display: "flex", flexDirection: "column", gap: 8, overflowY: "auto" }}>
+      <div className="glass-card view-panel" style={{ width: 260, flexShrink: 0, padding: 16, display: "flex", flexDirection: "column", gap: 8, overflowY: "auto" }}>
         <div style={{ fontWeight: 800, fontSize: 12, textTransform: "uppercase", color: "var(--ink-500)" }}>Markers</div>
         {markers.map((m) => (
           <button
@@ -176,7 +176,7 @@ export function InventoryView() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+      <div className="view-main" style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         {selectedMarkerId && (
           <div>
             <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Items</div>

@@ -141,3 +141,107 @@ button {
 .muted {
   color: var(--ink-500);
 }
+
+/*
+ * Responsive shell for the two-panel (main content + side panel) layout
+ * every screen uses — added 2026-09-13 so the app reflows on tablet/
+ * narrow windows instead of only the ~1200px+ desktop width most screens
+ * were built and tested at. Each view keeps its own inline flex-ratio/
+ * width for the desktop case (e.g. `flex: 1.4` on main, `width: 380` on
+ * the panel) — these classes only add the responsive override on top,
+ * via `!important`, since a media query can't otherwise beat an inline
+ * style. `.view-main`/`.view-panel` also just set `min-width: 0` at the
+ * base, which stops a long unbroken string (a document number, an email)
+ * from forcing its flex child wider than the column, even on desktop.
+ */
+.view-row {
+  display: flex;
+  gap: 20px;
+  padding: 24px;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.view-main,
+.view-panel {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .view-row {
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .view-main,
+  .view-panel {
+    width: 100% !important;
+    flex: none !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .view-row {
+    padding: 12px;
+    gap: 12px;
+  }
+}
+
+/* Same padding/gap trim as .view-row, for the handful of screens that
+   are a single scrolling column at every width (no side panel to stack) —
+   e.g. MarginOverridesView.tsx — so it doesn't get the row->column flip
+   it doesn't need. */
+@media (max-width: 900px) {
+  .view-shell {
+    padding: 16px;
+  }
+}
+@media (max-width: 560px) {
+  .view-shell {
+    padding: 12px;
+  }
+}
+
+/*
+ * App header: a flat row of logo + nav + user info/logout, built assuming
+ * a wide desktop window. Lets it wrap onto extra lines on a narrow
+ * window instead of overflowing/clipping, rather than a full collapsed-
+ * menu redesign.
+ */
+@media (max-width: 900px) {
+  .app-header {
+    height: auto !important;
+    min-height: 64px;
+    flex-wrap: wrap;
+    row-gap: 10px;
+    padding: 10px 16px !important;
+  }
+
+  .app-nav {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-header .brand-logo {
+    height: 32px;
+  }
+}
+
+/* Login screens' centered card — already fluid (width: 100%, maxWidth),
+   just trims the outer/card padding so it doesn't eat the whole viewport
+   on a narrow window. */
+@media (max-width: 560px) {
+  .auth-shell {
+    padding: 12px !important;
+  }
+  .auth-shell > .glass-card {
+    padding: 24px 20px !important;
+  }
+}

@@ -122,8 +122,8 @@ export function PartyView() {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="view-row">
+      <div className="view-main" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>Customers &amp; vendors</div>
         {error && <div className="error-text">{error}</div>}
         {parties.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No parties yet — add one on the right.</div>}
@@ -153,7 +153,7 @@ export function PartyView() {
       </div>
 
       {ledgerPartyId ? (
-        <div className="glass-card" style={{ width: 380, flexShrink: 0, padding: 20, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+        <div className="glass-card view-panel" style={{ width: 380, flexShrink: 0, padding: 20, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Statement {ledger ? `— ${ledger.party.name}` : ""}</div>
             <button type="button" onClick={closeLedger} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18, minHeight: 44, minWidth: 44 }}>
@@ -236,7 +236,7 @@ export function PartyView() {
           )}
         </div>
       ) : (
-        <div className="glass-card" style={{ width: 340, flexShrink: 0, padding: 20, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+        <div className="glass-card view-panel" style={{ width: 340, flexShrink: 0, padding: 20, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
           <div style={{ fontWeight: 700, fontSize: 15 }}>New party</div>
           <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} style={{ padding: 10, fontSize: 13 }} />
           <label style={{ fontSize: 11.5 }} className="muted">

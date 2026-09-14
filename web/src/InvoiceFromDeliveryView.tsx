@@ -78,8 +78,8 @@ export function InvoiceFromDeliveryView() {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-      <div style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+    <div className="view-row">
+      <div className="view-main" style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>Raise invoice from delivery note(s)</div>
 
         <div className="glass-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -116,7 +116,7 @@ export function InvoiceFromDeliveryView() {
         </div>
       </div>
 
-      <div className="glass-card" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
+      <div className="glass-card view-panel" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>Invoice summary</div>
 
         {selectedDns.length === 0 && <div className="muted" style={{ fontSize: 13 }}>Select at least one delivery note.</div>}

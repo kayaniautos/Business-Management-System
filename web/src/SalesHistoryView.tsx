@@ -106,8 +106,8 @@ export function SalesHistoryView() {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+    <div className="view-row">
+      <div className="view-main" style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>Sales history</div>
         <div style={{ display: "flex", gap: 8 }}>
           <input
@@ -147,7 +147,7 @@ export function SalesHistoryView() {
       </div>
 
       {selected && (
-        <div className="glass-card" style={{ width: 360, flexShrink: 0, padding: 20, overflowY: "auto" }}>
+        <div className="glass-card view-panel" style={{ width: 360, flexShrink: 0, padding: 20, overflowY: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

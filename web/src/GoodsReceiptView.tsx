@@ -159,8 +159,8 @@ export function GoodsReceiptView() {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-      <div style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+    <div className="view-row">
+      <div className="view-main" style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>New goods receipt</div>
           <div style={{ display: "flex", gap: 6 }}>
@@ -247,7 +247,7 @@ export function GoodsReceiptView() {
         )}
       </div>
 
-      <div className="glass-card" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
+      <div className="glass-card view-panel" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>Received lines</div>
 
         {mode === "new" &&

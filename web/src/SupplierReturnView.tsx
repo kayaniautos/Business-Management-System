@@ -110,8 +110,8 @@ export function SupplierReturnView() {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-      <div style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+    <div className="view-row">
+      <div className="view-main" style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>New supplier return</div>
 
         <div className="glass-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -158,7 +158,7 @@ export function SupplierReturnView() {
         )}
       </div>
 
-      <div className="glass-card" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
+      <div className="glass-card view-panel" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>Return summary</div>
 
         {!sourceDetail && <div className="muted" style={{ fontSize: 13 }}>Select a posted goods receipt above.</div>}

@@ -39,7 +39,7 @@ export function AdminLoginView({
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div className="auth-shell" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div className="glass-card" style={{ width: "100%", maxWidth: 420, padding: "40px 44px", display: "flex", flexDirection: "column", gap: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <img src="/kt-logo.png" alt="Kiyan Traders" className="brand-logo" />

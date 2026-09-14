@@ -26,7 +26,7 @@ export function MarginOverridesView() {
   }, [entityId]);
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, padding: 24, overflow: "hidden" }}>
+    <div className="view-shell" style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, padding: 24, overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>Margin overrides</div>
         {entities && (

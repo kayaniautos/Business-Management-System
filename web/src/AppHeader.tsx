@@ -111,6 +111,7 @@ export function AppHeader({
 
   return (
     <div
+      className="app-header"
       style={{
         height: 72,
         display: "flex",
@@ -135,7 +136,7 @@ export function AppHeader({
     >
       <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
         <img src="/kt-logo.png" alt="Kiyan Traders" className="brand-logo" style={{ height: 36 }} />
-        <nav ref={navRef} style={{ display: "flex", gap: 6, position: "relative" }}>
+        <nav ref={navRef} className="app-nav" style={{ display: "flex", gap: 6, position: "relative" }}>
           <button type="button" onClick={() => selectView("pos")} style={tabStyle(view === "pos")}>
             {VIEW_LABELS.pos}
           </button>

@@ -151,8 +151,8 @@ export function QuotationView() {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 20, padding: 24, overflow: "hidden" }}>
-      <div style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+    <div className="view-row">
+      <div className="view-main" style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>New quotation</div>
 
         <div className="glass-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -220,7 +220,7 @@ export function QuotationView() {
         </div>
       </div>
 
-      <div className="glass-card" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
+      <div className="glass-card view-panel" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", padding: 20, gap: 14, overflowY: "auto" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>Quotation lines</div>
 
         {lines.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No lines yet — search and add parts.</div>}
