@@ -58,6 +58,32 @@ line that doesn't exist anywhere else in this schema.
 
 ---
 
+## 2026-09-14 — Skip the Year field entirely when a model has no real year data
+
+**What triggered this:** Mehmoon's follow-up the same day, after the
+Variant feature shipped: "year is showing VTi · Year not specified ·
+Manual · Petrol." Asked what the actual problem was before fixing it —
+two different fixes were on the table (reword the label vs. remove the
+field entirely) and only one matched what he meant.
+
+**Decision:** when NOT ONE row for a selected Make+Model has a real
+`yearFrom`/`yearTo`, don't render the Year field at all — go straight
+from Model to Variant, built from every row for that model rather than
+from a year selection. If that also leaves exactly one row, resolve
+immediately, same as the already-established "skip a redundant single-
+option step" pattern.
+
+**Why this is scoped to "not one row has a year," not "any row lacks a
+year":** the earlier fix (label the sentinel with variant name) still
+applies to the mixed case — a model where some rows are dated and
+others aren't. There a Year field is still genuinely useful (it has
+real years to offer), so the undated rows just remain reachable as
+labeled entries inside it, unchanged. Only when the field would contain
+*nothing but* undated entries — making it not a Year field at all in
+any real sense — does it make sense to remove it.
+
+---
+
 ## 2026-09-14 — Vehicle search cascade order: Year before Variant, not after
 
 **What triggered this:** Mehmoon noticed the POS vehicle-fitment search
