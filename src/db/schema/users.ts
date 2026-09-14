@@ -76,6 +76,53 @@ export const rolePermissions = pgTable(
   ],
 );
 
+/**
+ * Which top-level NAV MODULES (POS/Parties/Sales/Inventory/Purchasing —
+ * see `server/module-keys.ts` for the fixed list) a role's members can
+ * even see, built 2026-09-14 per Mehmoon's direct request: "each user
+ * role will have access to only its relevant modules, unless the admin
+ * selects multiple or all modules for them... admin will have access to
+ * everything."
+ *
+ * Deliberately a SEPARATE, simpler concept from `permissions`/
+ * `role_permissions` above — this is coarse nav-level screen visibility
+ * (can this role even open the Inventory module at all), not the finer
+ * action-level authority (can this role approve a discount, see cost/
+ * margin) CLAUDE.md 5.8 reserves for the still-unscoped Authority Levels
+ * conversation. `moduleKey` is a plain string, not a foreign key into a
+ * managed catalog table like `permissions` is — the module list is a
+ * small, fixed set the frontend nav itself defines, not something an
+ * admin creates/edits entries for.
+ *
+ * `isAdmin` (on `users`) bypasses this entirely and always sees every
+ * module, per Mehmoon's own framing above — module access only applies
+ * to a non-admin user's role(s).
+ *
+ * Enforced UI-side only, same as every other access rule in this app
+ * right now (no session/auth-token gating exists yet on the API itself —
+ * see app.ts's own comment) — a real backend enforcement layer needs
+ * that broader auth work first, not something to bolt on narrowly here.
+ */
+export const roleModules = pgTable(
+  "role_modules",
+  {
+    ...idColumn,
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "cascade" }),
+    moduleKey: varchar("module_key", { length: 50 }).notNull(),
+    ...timestampColumns,
+    createdBy: uuid("created_by").references((): AnyPgColumn => users.id),
+    updatedBy: uuid("updated_by").references((): AnyPgColumn => users.id),
+  },
+  (table) => [
+    uniqueIndex("role_modules_role_module_unique").on(
+      table.roleId,
+      table.moduleKey,
+    ),
+  ],
+);
+
 export const users = pgTable("users", {
   ...idColumn,
   username: varchar("username", { length: 100 }).notNull().unique(),

@@ -10,11 +10,13 @@ import {
   grantAdmin,
   revokeAdmin,
   setMarginBand,
+  setRoleModules,
   setUserRoles,
   updateAdminUser,
   type AdminUser,
   type Role,
 } from "./api.js";
+import { MODULE_KEYS, MODULE_LABELS, type ModuleKey } from "./AppHeader.js";
 
 /**
  * Admin Settings — role and staff-account management (CLAUDE.md 5.8:
@@ -106,6 +108,31 @@ export function AdminSettingsView() {
       setError(e instanceof Error ? e.message : "Could not create role");
     } finally {
       setSavingRole(false);
+    }
+  }
+
+  // Module access per role (Mehmoon's request, 2026-09-14: "each user
+  // role will have access to only its relevant modules, unless the
+  // admin selects multiple or all modules for them"). A user's own
+  // moduleKeys are computed at login as the UNION across every role
+  // they hold — an admin account bypasses this entirely (server-side,
+  // auth.ts), so nothing here needs an admin-only special case.
+  async function toggleRoleModule(role: Role, key: ModuleKey) {
+    const next = role.moduleKeys.includes(key) ? role.moduleKeys.filter((k) => k !== key) : [...role.moduleKeys, key];
+    try {
+      await setRoleModules(role.id, next);
+      loadRoles();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update module access");
+    }
+  }
+
+  async function setAllRoleModules(role: Role, on: boolean) {
+    try {
+      await setRoleModules(role.id, on ? [...MODULE_KEYS] : []);
+      loadRoles();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update module access");
     }
   }
 
@@ -467,6 +494,48 @@ export function AdminSettingsView() {
             {savingMarginBand ? "Saving..." : "Save"}
           </button>
           {marginBandSaved && <div className="muted" style={{ fontSize: 11.5, color: "oklch(45% 0.13 150)" }}>Saved.</div>}
+        </div>
+
+        <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>Module access</div>
+          <div className="muted" style={{ fontSize: 11.5 }}>
+            Which parts of the app a role can see. Admin accounts always see everything, regardless of role.
+          </div>
+          {roles.map((r) => (
+            <div key={r.id} style={{ display: "flex", flexDirection: "column", gap: 6, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{r.name}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {MODULE_KEYS.map((key) => {
+                  const has = r.moduleKeys.includes(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => toggleRoleModule(r, key)}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: 999,
+                        border: "1px solid var(--line)",
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        background: has ? "var(--accent)" : "white",
+                        color: has ? "white" : "var(--ink-500)",
+                      }}
+                    >
+                      {MODULE_LABELS[key]}
+                    </button>
+                  );
+                })}
+                <button type="button" onClick={() => setAllRoleModules(r, true)} style={{ padding: "5px 12px", borderRadius: 999, border: "1px solid var(--line)", background: "white", fontSize: 11.5, cursor: "pointer" }}>
+                  All
+                </button>
+                <button type="button" onClick={() => setAllRoleModules(r, false)} style={{ padding: "5px 12px", borderRadius: 999, border: "1px solid var(--line)", background: "white", fontSize: 11.5, cursor: "pointer" }}>
+                  None
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>

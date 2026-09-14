@@ -73,6 +73,52 @@ const MODULES: NavModule[] = [
   },
 ];
 
+/**
+ * Role-based module access (Mehmoon's request, 2026-09-14: "each user
+ * role will have access to only its relevant modules, unless the admin
+ * selects multiple or all modules for them... admin will have access to
+ * everything"). `MODULE_KEYS` matches `server/module-keys.ts` exactly —
+ * "sales"/"inventory"/"purchasing" are the same strings as `MODULES`'
+ * own `key` above, and "pos"/"parties" cover the two standalone tabs.
+ * Admin Settings is NOT one of these — it stays gated purely by
+ * `user.isAdmin`, unrelated to a role's module grants, unchanged from
+ * before this feature.
+ *
+ * `user.moduleKeys` (LoginResult, computed server-side at login —
+ * auth.ts) is already the right answer for a non-admin user; `isAdmin`
+ * bypasses it entirely here rather than relying on the server having
+ * included every key, so a stale/cached login result can never
+ * accidentally under-grant an admin.
+ */
+export const MODULE_KEYS = ["pos", "parties", "sales", "inventory", "purchasing"] as const;
+export type ModuleKey = (typeof MODULE_KEYS)[number];
+export const MODULE_LABELS: Record<ModuleKey, string> = {
+  pos: "POS Counter",
+  parties: "Parties",
+  sales: "Sales",
+  inventory: "Inventory",
+  purchasing: "Purchasing",
+};
+
+export function hasModule(user: LoginResult, key: ModuleKey): boolean {
+  return user.isAdmin || user.moduleKeys.includes(key);
+}
+
+// Every view a user can currently reach — POS/Parties/Admin Settings
+// directly, everything else via whichever MODULES entries are unlocked.
+// Used by App.tsx to pick a sensible initial/fallback view instead of
+// assuming "pos" is always reachable.
+export function accessibleViews(user: LoginResult): View[] {
+  const views: View[] = [];
+  if (hasModule(user, "pos")) views.push("pos");
+  if (hasModule(user, "parties")) views.push("parties");
+  for (const mod of MODULES) {
+    if (hasModule(user, mod.key as ModuleKey)) views.push(...mod.views);
+  }
+  if (user.isAdmin) views.push("admin-settings");
+  return views;
+}
+
 const tabStyle = (active: boolean): React.CSSProperties => ({
   padding: "8px 16px",
   borderRadius: 10,
@@ -139,11 +185,13 @@ export function AppHeader({
       <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
         <img src="/kt-logo.png" alt="Kiyan Traders" className="brand-logo" style={{ height: 36 }} />
         <nav ref={navRef} className="app-nav" style={{ display: "flex", gap: 6, position: "relative" }}>
-          <button type="button" onClick={() => selectView("pos")} style={tabStyle(view === "pos")}>
-            {VIEW_LABELS.pos}
-          </button>
+          {hasModule(user, "pos") && (
+            <button type="button" onClick={() => selectView("pos")} style={tabStyle(view === "pos")}>
+              {VIEW_LABELS.pos}
+            </button>
+          )}
 
-          {MODULES.map((mod) => {
+          {MODULES.filter((mod) => hasModule(user, mod.key as ModuleKey)).map((mod) => {
             const active = mod.views.includes(view);
             const isOpen = openModule === mod.key;
             return (
@@ -198,9 +246,11 @@ export function AppHeader({
             );
           })}
 
-          <button type="button" onClick={() => selectView("parties")} style={tabStyle(view === "parties")}>
-            {VIEW_LABELS.parties}
-          </button>
+          {hasModule(user, "parties") && (
+            <button type="button" onClick={() => selectView("parties")} style={tabStyle(view === "parties")}>
+              {VIEW_LABELS.parties}
+            </button>
+          )}
           {user.isAdmin && (
             <button type="button" onClick={() => selectView("admin-settings")} style={tabStyle(view === "admin-settings")}>
               {VIEW_LABELS["admin-settings"]}

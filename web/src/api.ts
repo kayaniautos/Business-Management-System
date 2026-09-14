@@ -4,6 +4,10 @@ export interface LoginResult {
   fullName: string;
   roles: string[];
   isAdmin: boolean;
+  // Union of nav-module access across this user's role(s); an admin gets
+  // every module regardless of what's in here — see AppHeader.tsx's
+  // MODULE_KEYS/hasModule for how this is actually applied.
+  moduleKeys: string[];
 }
 
 export interface PartSearchResult {
@@ -559,9 +563,12 @@ export interface Role {
   name: string;
   description: string | null;
   isSystem: boolean;
+  moduleKeys: string[];
 }
 
 export const getRoles = () => getJson<Role[]>("/api/admin/roles");
+export const setRoleModules = (roleId: string, moduleKeys: string[]) =>
+  putJson<Role>(`/api/admin/roles/${roleId}/modules`, { moduleKeys });
 export const createRole = (input: { name: string; description?: string }) =>
   postJson<Role>("/api/admin/roles", input);
 

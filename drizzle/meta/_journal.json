@@ -106,6 +106,13 @@
       "when": 1789372172992,
       "tag": "0014_ancient_mauler",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789387275172,
+      "tag": "0015_odd_la_nuit",
+      "breakpoints": true
     }
   ]
 }

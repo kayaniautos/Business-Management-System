@@ -2,9 +2,10 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { eq, isNotNull, and } from "drizzle-orm";
+import { eq, isNotNull, and, inArray } from "drizzle-orm";
 import { db } from "../../db/client.js";
-import { users, userRoles, roles } from "../../db/schema/index.js";
+import { users, userRoles, roles, roleModules } from "../../db/schema/index.js";
+import { MODULE_KEYS } from "../module-keys.js";
 
 // Failed-PIN lockout (Mehmoon's direction, 2026-09-10): both numbers are
 // inferred defaults, not a client-confirmed policy.
@@ -33,6 +34,11 @@ const loginResponseSchema = z.object({
   fullName: z.string(),
   roles: z.array(z.string()),
   isAdmin: z.boolean(),
+  // Union of nav-module access across every role this user holds — an
+  // admin gets every module regardless (Mehmoon's request, 2026-09-14:
+  // "admin will have access to everything"). See module-keys.ts and
+  // schema/users.ts's roleModules comment for the full design.
+  moduleKeys: z.array(z.string()),
 });
 
 const errorResponseSchema = z.object({ error: z.string() });
@@ -48,6 +54,25 @@ async function rolesForUser(userId: string) {
     .innerJoin(roles, eq(userRoles.roleId, roles.id))
     .where(eq(userRoles.userId, userId));
   return roleRows.map((r) => r.name);
+}
+
+// Union of nav-module access across every role a user holds — a user
+// with, say, both "Inventory Control" and "Corporate Control" sees
+// whichever modules EITHER role grants, not just the intersection.
+async function moduleKeysForUser(userId: string, isAdmin: boolean): Promise<string[]> {
+  if (isAdmin) return [...MODULE_KEYS];
+
+  const userRoleIds = await db
+    .select({ roleId: userRoles.roleId })
+    .from(userRoles)
+    .where(eq(userRoles.userId, userId));
+  if (userRoleIds.length === 0) return [];
+
+  const rows = await db
+    .selectDistinct({ moduleKey: roleModules.moduleKey })
+    .from(roleModules)
+    .where(inArray(roleModules.roleId, userRoleIds.map((r) => r.roleId)));
+  return rows.map((r) => r.moduleKey);
 }
 
 /**
@@ -145,6 +170,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         fullName: user.fullName,
         roles: await rolesForUser(user.id),
         isAdmin: user.isAdmin,
+        moduleKeys: await moduleKeysForUser(user.id, user.isAdmin),
       };
     },
   );
@@ -177,6 +203,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         fullName: user.fullName,
         roles: await rolesForUser(user.id),
         isAdmin: user.isAdmin,
+        moduleKeys: await moduleKeysForUser(user.id, user.isAdmin),
       };
     },
   );

@@ -15,6 +15,7 @@
     "db:seed:car-makes": "tsx src/db/seed-car-makes.ts",
     "db:seed:coa-codes": "tsx src/db/seed-coa-codes.ts",
     "db:seed:dummy-years": "tsx src/db/seed-dummy-years.ts",
+    "db:seed:role-modules": "tsx src/db/seed-role-modules.ts",
     "typecheck": "tsc --noEmit",
     "dev:server": "tsx watch src/server/index.ts",
     "dev:web": "vite",

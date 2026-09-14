@@ -18,12 +18,23 @@ import { PurchaseHistoryView } from "./PurchaseHistoryView.js";
 import { SupplierReturnView } from "./SupplierReturnView.js";
 import { CarModelsView } from "./CarModelsView.js";
 import { StockOrderingView } from "./StockOrderingView.js";
-import { AppHeader, type View } from "./AppHeader.js";
+import { AppHeader, accessibleViews, type View } from "./AppHeader.js";
 import type { LoginResult } from "./api.js";
 
 export function App() {
   const [user, setUser] = useState<LoginResult | null>(null);
   const [view, setView] = useState<View>("pos");
+
+  // A role might not include "pos" at all (Mehmoon's request, 2026-09-14:
+  // role-based module access) — land on whichever view the freshly
+  // logged-in user can actually reach, falling back to "pos" only when
+  // even that lookup somehow comes up empty (shouldn't happen: admin
+  // always gets everything, and a role with zero modules is a real,
+  // deliberate "no access" case with nowhere sensible to land anyway).
+  function handleLoggedIn(loggedInUser: LoginResult) {
+    setUser(loggedInUser);
+    setView(accessibleViews(loggedInUser)[0] ?? "pos");
+  }
 
   // Ctrl+H opens Sales History from anywhere in the app, per Mehmoon's
   // request — matches the F1-F9 lookup-shortcut convention already
@@ -43,14 +54,15 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [user]);
 
-  // Defensive: if admin status is revoked while this screen is open
-  // (e.g. an admin revoking their own access), fall back to POS rather
-  // than leaving a now-hidden view rendered.
+  // Defensive: if the current view stops being accessible (admin status
+  // revoked mid-session, or — since 2026-09-14 — a role's module access
+  // narrowed), fall back to the first view this user can still reach
+  // rather than leaving a now-hidden screen rendered.
   useEffect(() => {
-    if (user && !user.isAdmin && view === "admin-settings") setView("pos");
+    if (user && !accessibleViews(user).includes(view)) setView(accessibleViews(user)[0] ?? "pos");
   }, [user, view]);
 
-  if (!user) return <LoginView onLoggedIn={setUser} />;
+  if (!user) return <LoginView onLoggedIn={handleLoggedIn} />;
 
   function handleLogout() {
     setUser(null);
