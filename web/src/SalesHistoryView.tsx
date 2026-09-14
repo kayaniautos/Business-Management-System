@@ -11,6 +11,7 @@ import {
   type SalesDocumentSummary,
   type SettlementChannel,
 } from "./api.js";
+import { PrintSalesDocumentView } from "./PrintSalesDocumentView.js";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "var(--ink-500)",
@@ -28,6 +29,7 @@ export function SalesHistoryView() {
   const [rows, setRows] = useState<SalesDocumentSummary[]>([]);
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<SalesDocumentDetail | null>(null);
+  const [printing, setPrinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [payChannel, setPayChannel] = useState<SettlementChannel>("cash");
@@ -174,9 +176,18 @@ export function SalesHistoryView() {
                 <div className="muted" style={{ fontSize: 11.5 }}>Raised from: {selected.sourceDeliveryNotes.join(", ")}</div>
               )}
             </div>
-            <button type="button" onClick={() => setSelected(null)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18, minHeight: 44, minWidth: 44 }}>
-              &times;
-            </button>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              <button
+                type="button"
+                onClick={() => setPrinting(true)}
+                style={{ padding: "6px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+              >
+                Print
+              </button>
+              <button type="button" onClick={() => setSelected(null)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18, minHeight: 44, minWidth: 44 }}>
+                &times;
+              </button>
+            </div>
           </div>
 
           {selected.documentType !== "quotation" && selected.sourceDeliveryNotes.length === 0 && (
@@ -324,6 +335,8 @@ export function SalesHistoryView() {
           )}
         </div>
       )}
+
+      {printing && selected && <PrintSalesDocumentView doc={selected} onClose={() => setPrinting(false)} />}
     </div>
   );
 }

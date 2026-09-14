@@ -144,6 +144,23 @@ const salesDocumentDetailSchema = salesDocumentSummarySchema.extend({
   // one of these, on purpose: the real COGS was already recorded against
   // the source DN(s) when THEY were posted, not against this document.
   sourceDeliveryNotes: z.array(z.string()),
+  // These columns have existed on `sales_documents` since the schema was
+  // first built, but nothing ever returned them until printable
+  // documents needed them (2026-09-14) — a printed Quotation/DN/Invoice
+  // genuinely needs its PO number, GST/NTN, vehicle details, etc., none
+  // of which the on-screen detail panel had a reason to show before.
+  customerRef: z.string().nullable(),
+  ourRefNo: z.string().nullable(),
+  poNo: z.string().nullable(),
+  vehicleDetails: z.string().nullable(),
+  validUntil: z.string().nullable(),
+  customerGstNo: z.string().nullable(),
+  customerNtnNo: z.string().nullable(),
+  // Print Name pattern (CLAUDE.md 5.9) applied to the party on the
+  // printed document specifically — `partyName` above stays as the
+  // pre-existing plain `parties.name` the on-screen list/detail already
+  // used, unrelated call sites are left untouched.
+  partyPrintName: z.string().nullable(),
 });
 
 /**
@@ -240,11 +257,19 @@ export const salesRoutes: FastifyPluginAsync = async (fastify) => {
           entityName: legalEntities.name,
           partyId: salesDocuments.partyId,
           partyName: parties.name,
+          partyPrintName: sql<string | null>`coalesce(${parties.printName}, ${parties.name})`,
           documentDate: salesDocuments.documentDate,
           subtotalAmount: salesDocuments.subtotalAmount,
           discountTotal: salesDocuments.discountTotal,
           totalAmount: salesDocuments.totalAmount,
           status: salesDocuments.status,
+          customerRef: salesDocuments.customerRef,
+          ourRefNo: salesDocuments.ourRefNo,
+          poNo: salesDocuments.poNo,
+          vehicleDetails: salesDocuments.vehicleDetails,
+          validUntil: salesDocuments.validUntil,
+          customerGstNo: salesDocuments.customerGstNo,
+          customerNtnNo: salesDocuments.customerNtnNo,
         })
         .from(salesDocuments)
         .innerJoin(legalEntities, eq(salesDocuments.legalEntityId, legalEntities.id))

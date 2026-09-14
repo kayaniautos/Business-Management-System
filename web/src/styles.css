@@ -245,3 +245,34 @@ button {
     padding: 24px 20px !important;
   }
 }
+
+/*
+ * Printable documents (Quotation/DN/Invoice — CLAUDE.md 5.9/5.10, built
+ * 2026-09-14). PrintSalesDocumentView.tsx renders as a normal on-screen
+ * overlay (so staff can preview it, and its own toolbar buttons work),
+ * but `window.print()` should print ONLY the document itself, not the
+ * app's nav/toolbar around it. The standard trick for this in a plain
+ * CSS setup with no dedicated print stylesheet/route: hide literally
+ * everything on the page except the print area, then let that area fill
+ * the page. `.no-print` additionally hides the overlay's own on-screen
+ * toolbar (Print/Close buttons), which would otherwise still render as
+ * an empty visible box since it's inside `.print-area`.
+ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

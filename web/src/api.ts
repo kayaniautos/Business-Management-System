@@ -440,6 +440,17 @@ export interface SalesDocumentDetail extends SalesDocumentSummary {
   // for a checkout invoice. cogsAmount is "0.00" for one of these on
   // purpose: the real COGS was recorded against the source DN(s) instead.
   sourceDeliveryNotes: string[];
+  // Print-only fields (PrintSalesDocumentView.tsx) — these columns always
+  // existed on the document, just never returned until printing needed
+  // them.
+  customerRef: string | null;
+  ourRefNo: string | null;
+  poNo: string | null;
+  vehicleDetails: string | null;
+  validUntil: string | null;
+  customerGstNo: string | null;
+  customerNtnNo: string | null;
+  partyPrintName: string | null;
 }
 
 export type SalesDocumentType = "quotation" | "delivery_note" | "invoice";
