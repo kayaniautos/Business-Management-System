@@ -32,6 +32,30 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: (user: LoginResult) => v
       .catch((err) => setStaffError(err instanceof Error ? err.message : "Could not load staff"));
   }, []);
 
+  // Physical-keyboard PIN entry (Mehmoon's request, 2026-09-14) — the pad
+  // was mouse/touch-click only before. Only active once a staff member is
+  // picked (matching when the pad itself is actually shown), so typing
+  // elsewhere on this screen (e.g. the staff tiles) doesn't do anything
+  // unexpected. Same "window keydown listener, real accelerator once this
+  // is Electron" caveat as the app's own Ctrl+H shortcut (App.tsx).
+  useEffect(() => {
+    if (!selected) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key >= "0" && e.key <= "9") {
+        pressDigit(e.key);
+      } else if (e.key === "Backspace") {
+        pressBackspace();
+      } else if (e.key === "Enter") {
+        unlock();
+      } else if (e.key === "Escape") {
+        setError(null);
+        setPin("");
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selected, pin, loading]);
+
   function pressDigit(digit: string) {
     setError(null);
     setPin((prev) => (prev.length < MAX_PIN_LENGTH ? prev + digit : prev));
