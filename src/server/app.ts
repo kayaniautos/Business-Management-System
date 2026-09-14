@@ -25,6 +25,7 @@ import { supplierReturnsRoutes } from "./routes/supplier-returns.js";
 import { invoicesRoutes } from "./routes/invoices.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { reportsRoutes } from "./routes/reports.js";
+import { stockOrderingRoutes } from "./routes/stock-ordering.js";
 
 /**
  * First-pass Fastify backend for the vertical slice: real login against the
@@ -67,6 +68,7 @@ export function buildApp() {
   app.register(invoicesRoutes, { prefix: "/api/invoices" });
   app.register(settingsRoutes, { prefix: "/api/settings" });
   app.register(reportsRoutes, { prefix: "/api/reports" });
+  app.register(stockOrderingRoutes, { prefix: "/api/stock-ordering" });
 
   app.get("/api/health", async () => ({ ok: true }));
 

@@ -344,7 +344,10 @@ export function InventoryView() {
                   onChange={(e) =>
                     setEditItemFields((prev) => ({
                       ...prev,
-                      [f.key]: f.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value,
+                      // `null`, not `undefined`, when cleared — an
+                      // omitted key is dropped by JSON.stringify and
+                      // would silently leave the old value in place.
+                      [f.key]: f.type === "number" ? (e.target.value === "" ? null : Number(e.target.value)) : e.target.value,
                     }))
                   }
                   style={{ padding: 8, fontSize: 12.5, width: 130 }}

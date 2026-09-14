@@ -64,9 +64,14 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
     engineInfo: z.string().max(200).optional(),
     model: z.string().max(100).optional(),
     size: z.string().max(100).optional(),
-    rpp: z.number().nonnegative().optional(),
-    sap: z.number().nonnegative().optional(),
-    safetyStockDays: z.number().int().nonnegative().optional(),
+    // Nullable (not just optional): the Edit form always sends every
+    // field, using `null` to mean "the user cleared this," distinct from
+    // "omitted" (a text field's cleared "" already round-trips fine, but
+    // an omitted key is dropped by JSON.stringify — nullable is what lets
+    // clearing a NUMBER field actually reach this endpoint at all).
+    rpp: z.number().nonnegative().nullable().optional(),
+    sap: z.number().nonnegative().nullable().optional(),
+    safetyStockDays: z.number().int().nonnegative().nullable().optional(),
     printName: z.string().max(300).optional(),
   });
 
@@ -84,8 +89,12 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
   // `amount.toFixed(2)`) — the request body carries RPP/SAP as real
   // numbers for the client's convenience, converted here at the DB
   // boundary.
-  function toItemColumns<T extends { rpp?: number; sap?: number }>({ rpp, sap, ...rest }: T) {
-    return { ...rest, rpp: rpp !== undefined ? rpp.toFixed(2) : undefined, sap: sap !== undefined ? sap.toFixed(2) : undefined };
+  function toItemColumns<T extends { rpp?: number | null; sap?: number | null }>({ rpp, sap, ...rest }: T) {
+    return {
+      ...rest,
+      rpp: rpp === undefined ? undefined : rpp === null ? null : rpp.toFixed(2),
+      sap: sap === undefined ? undefined : sap === null ? null : sap.toFixed(2),
+    };
   }
 
   app.post(

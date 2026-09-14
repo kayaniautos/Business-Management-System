@@ -167,9 +167,14 @@ export interface ItemFormFields {
   engineInfo?: string;
   model?: string;
   size?: string;
-  rpp?: number;
-  sap?: number;
-  safetyStockDays?: number;
+  // Nullable, not just optional: `null` means "the user cleared this
+  // number field" and is sent through explicitly, since an omitted key
+  // is dropped by JSON.stringify and the server would just leave the
+  // old value alone (self-caught bug, fixed 2026-09-14 — see
+  // inventory.ts's own itemFieldsSchema comment).
+  rpp?: number | null;
+  sap?: number | null;
+  safetyStockDays?: number | null;
   printName?: string;
 }
 
@@ -600,6 +605,21 @@ export interface PurchaseLine {
   quantity: number;
   unitCost: number;
 }
+
+// Stock Ordering (Form E, CLAUDE.md 5.6) — see stock-ordering.ts for the
+// "Safety Stock Days used as a literal reorder-point quantity" caveat.
+export interface ReorderSuggestion {
+  controlPartId: string;
+  partNumber: string;
+  partName: string;
+  itemName: string;
+  safetyStockDays: number;
+  quantity: number;
+  currentUnitCost: string | null;
+}
+
+export const getReorderSuggestions = () =>
+  getJson<ReorderSuggestion[]>("/api/stock-ordering/suggestions");
 
 export interface PurchaseDocumentResult {
   id: string;
