@@ -11,6 +11,7 @@ import {
   revokeAdmin,
   setMarginBand,
   setUserRoles,
+  updateAdminUser,
   type AdminUser,
   type Role,
 } from "./api.js";
@@ -46,6 +47,13 @@ export function AdminSettingsView() {
   const [pin, setPin] = useState("");
   const [newUserRoleIds, setNewUserRoleIds] = useState<string[]>([]);
   const [savingUser, setSavingUser] = useState(false);
+
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editFullName, setEditFullName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editPin, setEditPin] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const [grantingAdminFor, setGrantingAdminFor] = useState<string | null>(null);
   const [grantIdentifier, setGrantIdentifier] = useState("");
@@ -143,6 +151,39 @@ export function AdminSettingsView() {
     }
   }
 
+  function startEditUser(user: AdminUser) {
+    setEditingUserId(user.id);
+    setEditUsername(user.username);
+    setEditFullName(user.fullName);
+    setEditPhone(user.phone ?? "");
+    setEditPin("");
+    setError(null);
+  }
+
+  async function handleSaveEditUser() {
+    if (!editingUserId || !editUsername.trim() || !editFullName.trim()) return;
+    if (editPin && !/^\d{4,6}$/.test(editPin)) {
+      setError("PIN must be 4 to 6 digits");
+      return;
+    }
+    setSavingEdit(true);
+    setError(null);
+    try {
+      await updateAdminUser(editingUserId, {
+        username: editUsername.trim(),
+        fullName: editFullName.trim(),
+        phone: editPhone.trim() || undefined,
+        pin: editPin || undefined,
+      });
+      setEditingUserId(null);
+      loadUsers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update staff account");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   async function toggleActive(user: AdminUser) {
     try {
       if (user.isActive) await deactivateUser(user.id);
@@ -206,6 +247,13 @@ export function AdminSettingsView() {
                   {u.phone && <div className="muted" style={{ fontSize: 11.5 }}>{u.phone}</div>}
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => startEditUser(u)}
+                    style={{ padding: "6px 14px", borderRadius: 10, border: "1px solid var(--line)", background: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                  >
+                    Edit
+                  </button>
                   {u.isAdmin ? (
                     <button
                       type="button"
@@ -240,6 +288,53 @@ export function AdminSettingsView() {
                   </button>
                 </div>
               </div>
+
+              {editingUserId === u.id && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8, background: "oklch(97% 0.005 260)", borderRadius: 10, padding: 10 }}>
+                  <input
+                    placeholder="Username"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    style={{ padding: 8, fontSize: 13, borderRadius: 8, border: "1px solid var(--line)" }}
+                  />
+                  <input
+                    placeholder="Full name"
+                    value={editFullName}
+                    onChange={(e) => setEditFullName(e.target.value)}
+                    style={{ padding: 8, fontSize: 13, borderRadius: 8, border: "1px solid var(--line)" }}
+                  />
+                  <input
+                    placeholder="Phone (optional)"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    style={{ padding: 8, fontSize: 13, borderRadius: 8, border: "1px solid var(--line)" }}
+                  />
+                  <input
+                    placeholder="Reset PIN (leave blank to keep current)"
+                    value={editPin}
+                    onChange={(e) => setEditPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    style={{ padding: 8, fontSize: 13, borderRadius: 8, border: "1px solid var(--line)" }}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ flex: 1, padding: "8px 0", fontSize: 12.5 }}
+                      disabled={savingEdit || !editUsername.trim() || !editFullName.trim()}
+                      onClick={handleSaveEditUser}
+                    >
+                      {savingEdit ? "Saving..." : "Save changes"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingUserId(null)}
+                      style={{ padding: "8px 14px", fontSize: 12.5, borderRadius: 8, border: "1px solid var(--line)", background: "white", cursor: "pointer" }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {grantingAdminFor === u.id && (
                 <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8, background: "oklch(97% 0.005 260)", borderRadius: 10, padding: 10 }}>

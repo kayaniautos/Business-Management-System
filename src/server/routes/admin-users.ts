@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { users, userRoles, roles } from "../../db/schema/index.js";
 
@@ -112,6 +112,50 @@ export const adminUsersRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       return toAdminUser(created);
+    },
+  );
+
+  /**
+   * Edit an existing staff account's basic profile (Mehmoon's request,
+   * 2026-09-14: "the admin should be able to add, edit or remove staff" —
+   * add and remove/deactivate already existed, this closes the missing
+   * "edit" gap). PIN is optional here and only reset when actually
+   * provided — leaving it blank keeps the staff member's existing PIN,
+   * so an admin correcting a typo'd name doesn't force a PIN change too.
+   */
+  app.put(
+    "/:id",
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        body: z.object({
+          username: z.string().trim().min(1).max(100),
+          fullName: z.string().trim().min(1).max(200),
+          phone: z.string().max(30).optional(),
+          pin: z.string().regex(/^\d{4,6}$/, "PIN must be 4 to 6 digits").optional(),
+        }),
+        response: { 200: adminUserResponseSchema, 400: errorResponseSchema, 404: errorResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { username, fullName, phone, pin } = request.body;
+
+      const user = await db.query.users.findFirst({ where: eq(users.id, id) });
+      if (!user) return reply.code(404).send({ error: "User not found" });
+
+      const clash = await db.query.users.findFirst({
+        where: and(eq(users.username, username), ne(users.id, id)),
+      });
+      if (clash) return reply.code(400).send({ error: "A user with this username already exists" });
+
+      const passwordHash = pin ? await bcrypt.hash(pin, 10) : undefined;
+      await db
+        .update(users)
+        .set({ username, fullName, phone: phone ?? null, ...(passwordHash ? { passwordHash } : {}) })
+        .where(eq(users.id, id));
+
+      return toAdminUser({ ...user, username, fullName, phone: phone ?? null });
     },
   );
 

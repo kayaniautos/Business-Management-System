@@ -587,6 +587,11 @@ export const createAdminUser = (input: {
   roleIds: string[];
 }) => postJson<AdminUser>("/api/admin/users", input);
 
+export const updateAdminUser = (
+  userId: string,
+  input: { username: string; fullName: string; phone?: string; pin?: string },
+) => putJson<AdminUser>(`/api/admin/users/${userId}`, input);
+
 export const setUserRoles = (userId: string, roleIds: string[]) =>
   putJson<AdminUser>(`/api/admin/users/${userId}/roles`, { roleIds });
 
