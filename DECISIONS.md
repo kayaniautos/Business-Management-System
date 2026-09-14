@@ -58,6 +58,62 @@ line that doesn't exist anywhere else in this schema.
 
 ---
 
+## 2026-09-14 — Vehicle search cascade order: Year before Variant, not after
+
+**What triggered this:** Mehmoon noticed the POS vehicle-fitment search
+only ever used Make/Model/Year, even though `car_models` has carried
+`variant`/`transmission`/`engineFuel` since the Car Models screen was
+built (2026-09-11) — asked directly rather than guessed at, since there
+were genuinely several reasonable designs (cascade order, whether
+Transmission/Fuel should narrow results or just label them, and how
+broadly to apply a type-ahead combobox).
+
+**Decision, Mehmoon's explicit call, not the initially-recommended
+option:** Make → Model → Year → Variant, with Transmission/Fuel as
+labels only (never their own filter step), and every field in the
+cascade — including the newly-added Variant — as a type-ahead combobox.
+
+**Why Year before Variant specifically:** "some variants don't come in
+some years, let's say Civic RS Turbo wasn't available in 2012." Putting
+Year first means it only ever offers years that actually exist for that
+Make+Model, and Variant then only ever lists variants that actually
+existed in the year already chosen — never a Year/Variant combination
+that doesn't correspond to a real `car_models` row. The initially-
+recommended alternative (Variant before Year) would have let staff pick
+a variant, then a year that variant was never actually sold in,
+resolving to nothing with no explanation why.
+
+**A real bug this fixed as a side effect, not a separately-scoped
+fix:** the old cascade generated one Year option per (row, year) pair.
+Two variants of the same model overlapping in year range (e.g. a GLi
+and an Altis both covering 2018) produced two identical, indistinguish-
+able "2018" entries in the Year dropdown — picking either silently
+resolved to whichever row happened to come first in the underlying
+array, with no way for staff to know which one they'd actually get.
+Grouping Year options by year VALUE (not by row) and only introducing
+the Variant step when a year still matches more than one row closes
+this without inventing a new UI pattern — most models never had
+overlapping variants, so most searches never see a Variant field at all.
+
+**Why Transmission/Fuel are labels, not filters:** "neither usually
+changes which parts fit" — adding them as their own dropdown steps would
+mean a real risk of zero results if the exact Transmission/Fuel value
+picked doesn't match the row that otherwise fits perfectly, for a
+distinction that's largely irrelevant to which parts are actually
+compatible. Showing them as a hint next to whichever step (Year or
+Variant) is already doing the real disambiguating keeps the information
+visible without adding a new way to accidentally search for nothing.
+
+**Why every field became a combobox instead of just Make/Model:**
+Mehmoon's explicit choice over the narrower "Make and Model only"
+option initially proposed — for consistency across the whole cascade,
+even though Year/Variant will typically have only a handful of options
+once Make+Model is picked. Implemented with the same native `<input
+list="..."> + <datalist>` pattern already used in `CarModelsView.tsx`,
+not a new custom combobox component.
+
+---
+
 ## 2026-09-13/14 — Made the layout responsive via shared classes, not per-screen rewrites
 
 **What triggered this:** Mehmoon's direct request, "make it responsive
