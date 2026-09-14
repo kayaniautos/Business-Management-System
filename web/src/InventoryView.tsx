@@ -11,11 +11,30 @@ import {
   getControlParts,
   getItems,
   getMarkers,
+  updateItem,
   type CarModel,
   type ControlPart,
   type InventoryItem,
+  type ItemFormFields,
   type Marker,
 } from "./api.js";
+
+const EMPTY_ITEM_FIELDS: ItemFormFields = {};
+
+// Form A's field labels (CLAUDE.md 5.1), reused for both the "New item"
+// form and the Edit form below so the two never drift out of sync.
+const ITEM_FIELD_DEFS: { key: keyof ItemFormFields; label: string; type?: "number" }[] = [
+  { key: "partNo", label: "Part No" },
+  { key: "brand", label: "Brand" },
+  { key: "origin", label: "Origin" },
+  { key: "itemClass", label: "Class" },
+  { key: "engineInfo", label: "Engine Info" },
+  { key: "model", label: "Model" },
+  { key: "size", label: "Size" },
+  { key: "safetyStockDays", label: "Safety Stock Days", type: "number" },
+  { key: "rpp", label: "RPP", type: "number" },
+  { key: "sap", label: "SAP", type: "number" },
+];
 
 export function InventoryView() {
   const [markers, setMarkers] = useState<Marker[]>([]);
@@ -25,6 +44,14 @@ export function InventoryView() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [newItemName, setNewItemName] = useState("");
+  const [showNewItemForm, setShowNewItemForm] = useState(false);
+  const [newItemFields, setNewItemFields] = useState<ItemFormFields>(EMPTY_ITEM_FIELDS);
+
+  const [editingItem, setEditingItem] = useState(false);
+  const [editItemName, setEditItemName] = useState("");
+  const [editItemFields, setEditItemFields] = useState<ItemFormFields>(EMPTY_ITEM_FIELDS);
+
+  const selectedItem = items.find((i) => i.id === selectedItemId) ?? null;
 
   const [controlParts, setControlParts] = useState<ControlPart[]>([]);
   const [newPartNumber, setNewPartNumber] = useState("");
@@ -72,6 +99,7 @@ export function InventoryView() {
       return;
     }
     getControlParts(selectedItemId).then(setControlParts).catch((e) => setError(String(e)));
+    setEditingItem(false);
   }, [selectedItemId]);
 
   async function refreshControlParts() {
@@ -92,11 +120,43 @@ export function InventoryView() {
   async function handleAddItem() {
     if (!newItemName.trim() || !selectedMarkerId) return;
     try {
-      const item = await createItem(newItemName.trim(), selectedMarkerId);
+      const item = await createItem(newItemName.trim(), selectedMarkerId, newItemFields);
       setItems((prev) => [...prev, item]);
       setNewItemName("");
+      setNewItemFields(EMPTY_ITEM_FIELDS);
+      setShowNewItemForm(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add item");
+    }
+  }
+
+  function startEditItem() {
+    if (!selectedItem) return;
+    setEditItemName(selectedItem.name);
+    setEditItemFields({
+      partNo: selectedItem.partNo ?? undefined,
+      brand: selectedItem.brand ?? undefined,
+      origin: selectedItem.origin ?? undefined,
+      itemClass: selectedItem.itemClass ?? undefined,
+      engineInfo: selectedItem.engineInfo ?? undefined,
+      model: selectedItem.model ?? undefined,
+      size: selectedItem.size ?? undefined,
+      safetyStockDays: selectedItem.safetyStockDays ?? undefined,
+      rpp: selectedItem.rpp ? Number(selectedItem.rpp) : undefined,
+      sap: selectedItem.sap ? Number(selectedItem.sap) : undefined,
+      printName: selectedItem.printName ?? undefined,
+    });
+    setEditingItem(true);
+  }
+
+  async function handleUpdateItem() {
+    if (!selectedItem || !editItemName.trim()) return;
+    try {
+      const updated = await updateItem(selectedItem.id, editItemName.trim(), editItemFields);
+      setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      setEditingItem(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update item");
     }
   }
 
@@ -190,12 +250,120 @@ export function InventoryView() {
                   onClick={() => setSelectedItemId(i.id)}
                 >
                   {i.name}
+                  <div className="muted" style={{ fontSize: 10 }}>{i.itemCode}</div>
                 </button>
               ))}
-              <div style={{ display: "flex", gap: 6 }}>
-                <input placeholder="New item" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />
-                <button type="button" onClick={handleAddItem} style={{ padding: "0 10px", cursor: "pointer" }}>+</button>
+              <button
+                type="button"
+                className="staff-tile"
+                style={{ padding: "8px 14px" }}
+                onClick={() => setShowNewItemForm((v) => !v)}
+              >
+                + New item
+              </button>
+            </div>
+
+            {showNewItemForm && (
+              <div className="glass-card" style={{ marginTop: 10, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>New item — Item Code is assigned automatically once saved</div>
+                <input placeholder="Name" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {ITEM_FIELD_DEFS.map((f) => (
+                    <input
+                      key={f.key}
+                      placeholder={f.label}
+                      type={f.type ?? "text"}
+                      value={newItemFields[f.key] ?? ""}
+                      onChange={(e) =>
+                        setNewItemFields((prev) => ({
+                          ...prev,
+                          [f.key]: f.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value,
+                        }))
+                      }
+                      style={{ padding: 8, fontSize: 12.5, width: 130 }}
+                    />
+                  ))}
+                  <input
+                    placeholder="Print Name (auto: Class + Part No + Brand, editable)"
+                    value={newItemFields.printName ?? ""}
+                    onChange={(e) => setNewItemFields((prev) => ({ ...prev, printName: e.target.value }))}
+                    style={{ padding: 8, fontSize: 12.5, width: 280 }}
+                  />
+                </div>
+                <div>
+                  <button type="button" className="btn-primary" style={{ padding: "8px 16px" }} onClick={handleAddItem}>
+                    Save item
+                  </button>
+                </div>
               </div>
+            )}
+          </div>
+        )}
+
+        {selectedItem && !editingItem && (
+          <div className="glass-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{selectedItem.name}</div>
+                <div className="muted" style={{ fontSize: 12 }}>Item Code {selectedItem.itemCode}</div>
+              </div>
+              <button type="button" onClick={startEditItem} style={{ fontSize: 12, cursor: "pointer" }}>
+                Edit
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5 }}>
+              {ITEM_FIELD_DEFS.map((f) =>
+                selectedItem[f.key] != null && selectedItem[f.key] !== "" ? (
+                  <div key={f.key}>
+                    <span className="muted">{f.label}: </span>
+                    {f.type === "number" && (f.key === "rpp" || f.key === "sap") ? `Rs ${selectedItem[f.key]}` : String(selectedItem[f.key])}
+                  </div>
+                ) : null,
+              )}
+              {selectedItem.printName && (
+                <div>
+                  <span className="muted">Print Name: </span>
+                  {selectedItem.printName}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {selectedItem && editingItem && (
+          <div className="glass-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Edit item — {selectedItem.itemCode}</div>
+            <input placeholder="Name" value={editItemName} onChange={(e) => setEditItemName(e.target.value)} style={{ padding: 8, fontSize: 12.5 }} />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {ITEM_FIELD_DEFS.map((f) => (
+                <input
+                  key={f.key}
+                  placeholder={f.label}
+                  type={f.type ?? "text"}
+                  value={editItemFields[f.key] ?? ""}
+                  onChange={(e) =>
+                    setEditItemFields((prev) => ({
+                      ...prev,
+                      [f.key]: f.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value,
+                    }))
+                  }
+                  style={{ padding: 8, fontSize: 12.5, width: 130 }}
+                />
+              ))}
+              <input
+                placeholder="Print Name"
+                value={editItemFields.printName ?? ""}
+                onChange={(e) => setEditItemFields((prev) => ({ ...prev, printName: e.target.value }))}
+                style={{ padding: 8, fontSize: 12.5, width: 280 }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="btn-primary" style={{ padding: "8px 16px" }} onClick={handleUpdateItem}>
+                Save changes
+              </button>
+              <button type="button" onClick={() => setEditingItem(false)} style={{ padding: "8px 16px", cursor: "pointer" }}>
+                Cancel
+              </button>
             </div>
           </div>
         )}

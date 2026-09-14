@@ -142,6 +142,35 @@ export interface InventoryItem {
   name: string;
   description: string | null;
   markerId: string | null;
+  itemCode: string;
+  partNo: string | null;
+  brand: string | null;
+  origin: string | null;
+  itemClass: string | null;
+  engineInfo: string | null;
+  model: string | null;
+  size: string | null;
+  rpp: string | null;
+  sap: string | null;
+  safetyStockDays: number | null;
+  printName: string | null;
+}
+
+// The fields Form A (CLAUDE.md 5.1) actually lets staff type — `name` and
+// `markerId` are separate required args on createItem/updateItem, same
+// split the API routes use (itemCode is server-generated, never sent).
+export interface ItemFormFields {
+  partNo?: string;
+  brand?: string;
+  origin?: string;
+  itemClass?: string;
+  engineInfo?: string;
+  model?: string;
+  size?: string;
+  rpp?: number;
+  sap?: number;
+  safetyStockDays?: number;
+  printName?: string;
 }
 
 export interface ControlPart {
@@ -200,8 +229,10 @@ export const createMarker = (name: string) =>
 
 export const getItems = (markerId?: string) =>
   getJson<InventoryItem[]>(`/api/inventory/items${markerId ? `?markerId=${markerId}` : ""}`);
-export const createItem = (name: string, markerId: string) =>
-  postJson<InventoryItem>("/api/inventory/items", { name, markerId });
+export const createItem = (name: string, markerId: string, fields: ItemFormFields = {}) =>
+  postJson<InventoryItem>("/api/inventory/items", { name, markerId, ...fields });
+export const updateItem = (id: string, name: string, fields: ItemFormFields = {}) =>
+  putJson<InventoryItem>(`/api/inventory/items/${id}`, { name, ...fields });
 
 export const getControlParts = (itemId?: string) =>
   getJson<ControlPart[]>(`/api/inventory/control-parts${itemId ? `?itemId=${itemId}` : ""}`);

@@ -10,6 +10,7 @@ import {
   carModels,
   partCarModels,
 } from "../../db/schema/index.js";
+import { assignItemCode } from "../services/item-codes.js";
 
 /**
  * First real CRUD for the three-step inventory structure (CLAUDE.md 5.2/
@@ -50,6 +51,43 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // Form A's lettered fields (CLAUDE.md 5.1), all optional except `name`
+  // (pre-existing, not itself one of the lettered fields — see the
+  // schema's own comment). `itemCode` is never accepted from the client:
+  // it's always server-generated (assignItemCode) so it can't collide or
+  // be spoofed.
+  const itemFieldsSchema = z.object({
+    partNo: z.string().max(100).optional(),
+    brand: z.string().max(100).optional(),
+    origin: z.string().max(100).optional(),
+    itemClass: z.string().max(100).optional(),
+    engineInfo: z.string().max(200).optional(),
+    model: z.string().max(100).optional(),
+    size: z.string().max(100).optional(),
+    rpp: z.number().nonnegative().optional(),
+    sap: z.number().nonnegative().optional(),
+    safetyStockDays: z.number().int().nonnegative().optional(),
+    printName: z.string().max(300).optional(),
+  });
+
+  // "Print Name pattern" (CLAUDE.md 5.9): system-composed, editable
+  // on-screen override. Form A specifies the formula as `Class + Part
+  // No + Brand` — whichever of those three are actually filled in, in
+  // that order, space-joined. Only used when the caller didn't already
+  // type their own Print Name.
+  function composePrintName(fields: { itemClass?: string; partNo?: string; brand?: string }) {
+    return [fields.itemClass, fields.partNo, fields.brand].filter((v) => v && v.trim()).join(" ") || null;
+  }
+
+  // drizzle's `numeric` columns are string-typed (same convention as
+  // every other money column in this app, e.g. settlements.ts's own
+  // `amount.toFixed(2)`) — the request body carries RPP/SAP as real
+  // numbers for the client's convenience, converted here at the DB
+  // boundary.
+  function toItemColumns<T extends { rpp?: number; sap?: number }>({ rpp, sap, ...rest }: T) {
+    return { ...rest, rpp: rpp !== undefined ? rpp.toFixed(2) : undefined, sap: sap !== undefined ? sap.toFixed(2) : undefined };
+  }
+
   app.post(
     "/items",
     {
@@ -58,11 +96,38 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
           name: z.string().min(1).max(200),
           description: z.string().max(2000).optional(),
           markerId: z.string().uuid(),
-        }),
+        }).merge(itemFieldsSchema),
       },
     },
     async (request) => {
-      const [row] = await db.insert(items).values(request.body).returning();
+      const { printName, ...body } = request.body;
+      const itemCode = await assignItemCode();
+      const [row] = await db
+        .insert(items)
+        .values({ ...toItemColumns(body), itemCode, printName: printName?.trim() || composePrintName(body) })
+        .returning();
+      return row;
+    },
+  );
+
+  app.put(
+    "/items/:id",
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        body: z.object({
+          name: z.string().min(1).max(200),
+          description: z.string().max(2000).optional(),
+        }).merge(itemFieldsSchema),
+      },
+    },
+    async (request, reply) => {
+      const [row] = await db
+        .update(items)
+        .set(toItemColumns(request.body))
+        .where(eq(items.id, request.params.id))
+        .returning();
+      if (!row) return reply.code(404).send({ error: "Item not found" });
       return row;
     },
   );

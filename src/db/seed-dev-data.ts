@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./client.js";
 import { users, userRoles } from "./schema/users.js";
 import { markers, items, controlParts } from "./schema/inventory.js";
+import { assignItemCode } from "../server/services/item-codes.js";
 import { carModels, partCarModels } from "./schema/car-models.js";
 
 /**
@@ -95,7 +96,7 @@ async function main() {
   if (!oilFiltersItemId) {
     const [oilFilters] = await db
       .insert(items)
-      .values({ name: "Oil Filters", markerId: engineMarkerId })
+      .values({ name: "Oil Filters", markerId: engineMarkerId, itemCode: await assignItemCode() })
       .returning();
     oilFiltersItemId = oilFilters?.id;
   }
