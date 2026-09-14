@@ -34,7 +34,21 @@ import { MODULE_KEYS, MODULE_LABELS, type ModuleKey } from "./AppHeader.js";
  * but the API underneath still isn't session-gated (src/server/app.ts's
  * own comment) — a pre-existing limitation, not something new.
  */
+const ADMIN_TABS = [
+  { key: "staff", label: "Staff Accounts" },
+  { key: "roles", label: "Roles & Access" },
+  { key: "settings", label: "Settings" },
+] as const;
+type AdminTab = (typeof ADMIN_TABS)[number]["key"];
+
 export function AdminSettingsView() {
+  // Split into tabs (Mehmoon's request, 2026-09-14) — this screen had
+  // grown into one long scrolling sidebar (staff creation, margin alert,
+  // module access per role, role creation all stacked in one column) as
+  // features accumulated. Grouped by subject rather than by "form vs.
+  // list," matching the module-dropdown grouping AppHeader.tsx already
+  // uses for the same "too many things in one place" problem.
+  const [tab, setTab] = useState<AdminTab>("staff");
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -253,11 +267,33 @@ export function AdminSettingsView() {
   }
 
   return (
-    <div className="view-row">
-      <div className="view-main" style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
-        <div style={{ fontWeight: 700, fontSize: 16 }}>Staff accounts</div>
-        {error && <div className="error-text">{error}</div>}
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <div style={{ display: "flex", gap: 6, padding: "16px 24px 0", flexShrink: 0 }}>
+        {ADMIN_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            style={{
+              padding: "10px 18px",
+              borderRadius: 10,
+              border: "none",
+              fontWeight: 700,
+              fontSize: 13.5,
+              cursor: "pointer",
+              background: tab === t.key ? "var(--ink-900)" : "transparent",
+              color: tab === t.key ? "white" : "var(--ink-700)",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {error && <div className="error-text" style={{ padding: "10px 24px 0" }}>{error}</div>}
 
+      {tab === "staff" && (
+        <div className="view-row">
+          <div className="view-main" style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {users.map((u) => (
             <div key={u.id} className="glass-card" style={{ padding: 14, opacity: u.isActive ? 1 : 0.55 }}>
@@ -428,90 +464,26 @@ export function AdminSettingsView() {
         </div>
       </div>
 
-      <div className="view-panel" style={{ width: 420, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
-        <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>New staff account</div>
-          <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }} />
-          <input placeholder="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }} />
-          <input placeholder="Phone (optional)" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }} />
-          <input
-            placeholder="PIN (4-6 digits)"
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }}
-          />
-          <div>
-            <div className="muted" style={{ fontSize: 11.5, marginBottom: 6 }}>Roles</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {roles.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => toggleNewUserRole(r.id)}
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 999,
-                    border: "1px solid var(--line)",
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    background: newUserRoleIds.includes(r.id) ? "var(--ink-900)" : "white",
-                    color: newUserRoleIds.includes(r.id) ? "white" : "var(--ink-500)",
-                  }}
-                >
-                  {r.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={savingUser || !username.trim() || !fullName.trim() || !/^\d{4,6}$/.test(pin)}
-            onClick={handleCreateUser}
-          >
-            {savingUser ? "Saving..." : "Create staff account"}
-          </button>
-        </div>
-
-        <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>Margin alert</div>
-          <div className="muted" style={{ fontSize: 11.5 }}>
-            A sale line below this margin gets flagged as a soft warning — it never blocks the sale, just logs it for review.
-          </div>
-          <label className="muted" style={{ fontSize: 11.5 }}>
-            Minimum margin %
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={marginBand}
-              onChange={(e) => { setMarginBandInput(e.target.value); setMarginBandSaved(false); }}
-              style={{ display: "block", width: "100%", padding: 10, marginTop: 4, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }}
-            />
-          </label>
-          <button type="button" className="btn-primary" disabled={savingMarginBand || !marginBand} onClick={handleSaveMarginBand}>
-            {savingMarginBand ? "Saving..." : "Save"}
-          </button>
-          {marginBandSaved && <div className="muted" style={{ fontSize: 11.5, color: "oklch(45% 0.13 150)" }}>Saved.</div>}
-        </div>
-
-        <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>Module access</div>
-          <div className="muted" style={{ fontSize: 11.5 }}>
-            Which parts of the app a role can see. Admin accounts always see everything, regardless of role.
-          </div>
-          {roles.map((r) => (
-            <div key={r.id} style={{ display: "flex", flexDirection: "column", gap: 6, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{r.name}</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {MODULE_KEYS.map((key) => {
-                  const has = r.moduleKeys.includes(key);
-                  return (
+          <div className="view-panel" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+            <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>New staff account</div>
+              <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }} />
+              <input placeholder="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }} />
+              <input placeholder="Phone (optional)" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }} />
+              <input
+                placeholder="PIN (4-6 digits)"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }}
+              />
+              <div>
+                <div className="muted" style={{ fontSize: 11.5, marginBottom: 6 }}>Roles</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {roles.map((r) => (
                     <button
-                      key={key}
+                      key={r.id}
                       type="button"
-                      onClick={() => toggleRoleModule(r, key)}
+                      onClick={() => toggleNewUserRole(r.id)}
                       style={{
                         padding: "5px 12px",
                         borderRadius: 999,
@@ -519,39 +491,122 @@ export function AdminSettingsView() {
                         fontSize: 11.5,
                         fontWeight: 700,
                         cursor: "pointer",
-                        background: has ? "var(--accent)" : "white",
-                        color: has ? "white" : "var(--ink-500)",
+                        background: newUserRoleIds.includes(r.id) ? "var(--ink-900)" : "white",
+                        color: newUserRoleIds.includes(r.id) ? "white" : "var(--ink-500)",
                       }}
                     >
-                      {MODULE_LABELS[key]}
+                      {r.name}
                     </button>
-                  );
-                })}
-                <button type="button" onClick={() => setAllRoleModules(r, true)} style={{ padding: "5px 12px", borderRadius: 999, border: "1px solid var(--line)", background: "white", fontSize: 11.5, cursor: "pointer" }}>
-                  All
-                </button>
-                <button type="button" onClick={() => setAllRoleModules(r, false)} style={{ padding: "5px 12px", borderRadius: 999, border: "1px solid var(--line)", background: "white", fontSize: 11.5, cursor: "pointer" }}>
-                  None
-                </button>
+                  ))}
+                </div>
               </div>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={savingUser || !username.trim() || !fullName.trim() || !/^\d{4,6}$/.test(pin)}
+                onClick={handleCreateUser}
+              >
+                {savingUser ? "Saving..." : "Create staff account"}
+              </button>
             </div>
-          ))}
+          </div>
         </div>
+      )}
 
-        <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>New role</div>
-          <input placeholder="Role name" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }} />
-          <textarea
-            placeholder="Description (optional)"
-            value={newRoleDescription}
-            onChange={(e) => setNewRoleDescription(e.target.value)}
-            style={{ padding: 10, fontSize: 13, minHeight: 56, fontFamily: "inherit", borderRadius: 10, border: "1px solid var(--line)" }}
-          />
-          <button type="button" className="btn-primary" disabled={savingRole || !newRoleName.trim()} onClick={handleCreateRole}>
-            {savingRole ? "Saving..." : "Create role"}
-          </button>
+      {tab === "roles" && (
+        <div className="view-row">
+          <div className="view-main" style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+            {roles.map((r) => (
+              <div key={r.id} className="glass-card" style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                    {r.name}
+                    {r.isSystem && (
+                      <span className="muted" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, border: "1px solid var(--line)", borderRadius: 6, padding: "2px 6px" }}>
+                        SYSTEM
+                      </span>
+                    )}
+                  </div>
+                  {r.description && <div className="muted" style={{ fontSize: 11.5 }}>{r.description}</div>}
+                </div>
+                <div className="muted" style={{ fontSize: 10.5, textTransform: "uppercase", fontWeight: 800, letterSpacing: 0.3 }}>Module access</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {MODULE_KEYS.map((key) => {
+                    const has = r.moduleKeys.includes(key);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => toggleRoleModule(r, key)}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: 999,
+                          border: "1px solid var(--line)",
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          background: has ? "var(--accent)" : "white",
+                          color: has ? "white" : "var(--ink-500)",
+                        }}
+                      >
+                        {MODULE_LABELS[key]}
+                      </button>
+                    );
+                  })}
+                  <button type="button" onClick={() => setAllRoleModules(r, true)} style={{ padding: "5px 12px", borderRadius: 999, border: "1px solid var(--line)", background: "white", fontSize: 11.5, cursor: "pointer" }}>
+                    All
+                  </button>
+                  <button type="button" onClick={() => setAllRoleModules(r, false)} style={{ padding: "5px 12px", borderRadius: 999, border: "1px solid var(--line)", background: "white", fontSize: 11.5, cursor: "pointer" }}>
+                    None
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="view-panel" style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+            <div className="glass-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>New role</div>
+              <input placeholder="Role name" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }} />
+              <textarea
+                placeholder="Description (optional)"
+                value={newRoleDescription}
+                onChange={(e) => setNewRoleDescription(e.target.value)}
+                style={{ padding: 10, fontSize: 13, minHeight: 56, fontFamily: "inherit", borderRadius: 10, border: "1px solid var(--line)" }}
+              />
+              <button type="button" className="btn-primary" disabled={savingRole || !newRoleName.trim()} onClick={handleCreateRole}>
+                {savingRole ? "Saving..." : "Create role"}
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {tab === "settings" && (
+        <div className="view-shell" style={{ flex: 1, padding: 24, overflowY: "auto" }}>
+          <div className="glass-card" style={{ maxWidth: 420, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Margin alert</div>
+            <div className="muted" style={{ fontSize: 11.5 }}>
+              A sale line below this margin gets flagged as a soft warning — it never blocks the sale, just logs it for review.
+            </div>
+            <label className="muted" style={{ fontSize: 11.5 }}>
+              Minimum margin %
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={marginBand}
+                onChange={(e) => { setMarginBandInput(e.target.value); setMarginBandSaved(false); }}
+                style={{ display: "block", width: "100%", padding: 10, marginTop: 4, fontSize: 14, borderRadius: 10, border: "1px solid var(--line)" }}
+              />
+            </label>
+            <button type="button" className="btn-primary" disabled={savingMarginBand || !marginBand} onClick={handleSaveMarginBand}>
+              {savingMarginBand ? "Saving..." : "Save"}
+            </button>
+            {marginBandSaved && <div className="muted" style={{ fontSize: 11.5, color: "oklch(45% 0.13 150)" }}>Saved.</div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
