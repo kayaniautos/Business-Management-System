@@ -141,8 +141,10 @@ Reorder suggestions based on Safety Stock Days (Form A). On-demand report genera
 
 **First pass built 2026-09-14** — see section 9's build log entry for the full detail. Safety Stock Days is used as a literal reorder-point quantity, not a true days-of-cover calculation (no sales-velocity metric exists to compute that) — `[unclear — confirm]` if the client wants the fuller "Detail Discussed" version once that follow-up happens.
 
-### 5.7 Stock Adjustment Form (Form "F") — not built yet
+### 5.7 Stock Adjustment Form (Form "F") — built 2026-09-10
 Pick Item Code → system shows current qty → staff enters +/- adjustment qty → **mandatory, detailed comment** (audit trail for shrinkage/damage/recount) → on posting, SAP is adjusted as a consequence. Also marked "Detailed Discussion" in client's notes.
+
+**Built 2026-09-10** — see section 9's "Real Stock Adjustment (Form F), plus the first stock-quantity ledger" build log entry for the full detail, including what's deliberately not built ("SAP adjusted on posting" — SAP doesn't exist as a schema field, section 5.1/5.11).
 
 ### 5.8 Authority Levels / Form (Form "G") — the least-specified module, do not build schema for this yet
 
