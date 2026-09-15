@@ -682,6 +682,9 @@ export interface PurchaseDocumentDetail extends PurchaseDocumentSummary {
   // Goods receipt(s) a Purchase Invoice was raised from — empty for
   // every other document type.
   sourceGoodsReceipts: string[];
+  // Print Name pattern (CLAUDE.md 5.9) applied to the supplier, for
+  // PrintPurchaseDocumentView.tsx.
+  partyPrintName: string | null;
 }
 
 export type PurchaseDocumentType = "purchase_order" | "goods_receipt" | "purchase_invoice" | "supplier_return";

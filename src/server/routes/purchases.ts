@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
   purchaseDocuments,
@@ -59,6 +59,11 @@ const purchaseDocumentDetailSchema = purchaseDocumentSummarySchema.extend({
   // 2026-09-13) — always empty for a Purchase Order/Goods Receipt/
   // Supplier Return, only ever set on a Purchase Invoice.
   sourceGoodsReceipts: z.array(z.string()),
+  // Print Name pattern (CLAUDE.md 5.9) applied to the supplier, for
+  // PrintPurchaseDocumentView.tsx (built 2026-09-15) — `partyName` above
+  // is untouched, still plain `parties.name`, matching every other
+  // existing call site.
+  partyPrintName: z.string().nullable(),
 });
 
 const errorResponseSchema = z.object({ error: z.string() });
@@ -140,6 +145,7 @@ export const purchasesRoutes: FastifyPluginAsync = async (fastify) => {
           entityName: legalEntities.name,
           partyId: purchaseDocuments.partyId,
           partyName: parties.name,
+          partyPrintName: sql<string | null>`coalesce(${parties.printName}, ${parties.name})`,
           supplierRef: purchaseDocuments.supplierRef,
           documentDate: purchaseDocuments.documentDate,
           subtotalAmount: purchaseDocuments.subtotalAmount,
